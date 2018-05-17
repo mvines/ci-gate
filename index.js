@@ -16,12 +16,12 @@ const envconst = {
   GITHUB_TOKEN: null,
   PORT: 5000,
   GITHUB_WEBHOOK_SECRET: null,
-  CI_USER_WHITELIST: 'mvines', // comma separated, no spaces
+  CI_USER_WHITELIST: '', // comma separated, no spaces
 };
 
 for (const v in envconst) {
   envconst[v] = process.env[v] || envconst[v];
-  if (!envconst[v]) {
+  if (envconst[v] === null) {
     throw new Error(`${v} environment variable not defined`);
   }
 }
@@ -63,6 +63,14 @@ async function prHasLabel(repoName, prNumber, labelName) {
   return labelNames.includes(labelName);
 }
 
+async function userInCiWhitelist(repoName, user) {
+  const repo = githubClient.repo(repoName);
+  if (await repo.collaboratorsAsync(user)) {
+    return true;
+  }
+  return envconst.CI_USER_WHITELIST.split(',').includes(user);
+}
+
 async function prRemoveLabel(repoName, prNumber, labelName) {
   log.info(`Removing label ${labelName} from ${repoName}#${prNumber}`);
   const issue = githubClient.issue(repoName, prNumber);
@@ -98,13 +106,13 @@ async function onGithubPullRequest(payload) {
     await prRemoveLabel(repoName, prNumber, CI_LABEL);
     const user = payload.sender.login;
 
-    if (envconst.CI_USER_WHITELIST.split(',').includes(user)) {
+    if (userInCiWhitelist(repoName, user)) {
       await prSetLabel(repoName, prNumber, CI_LABEL);
     } else {
       await repo.statusAsync(headSha, {
-        'state': 'failure',
+        'state': 'pending',
         'context': STATUS_CONTEXT,
-        'description': 'CI label required',
+        'description': `A project member must add the '${CI_LABEL}' label for tests to start`,
       });
     }
     break;
@@ -115,7 +123,7 @@ async function onGithubPullRequest(payload) {
         await repo.statusAsync(headSha, {
           'state': 'success',
           'context': STATUS_CONTEXT,
-          'description': 'PR accepted for CI',
+          'description': 'Pull Request accepted for test',
         });
         await prRemoveLabel(repoName, prNumber, CI_LABEL);
         await triggerBuildkiteCI(repoName, branch, prNumber, headSha);
