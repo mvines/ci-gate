@@ -124,7 +124,7 @@ async function onGithubPullRequest(payload) {
 
   log.info(payload.action, headSha, prNumber, repoName);
   switch (payload.action) {
-  case 'open':
+  case 'opened':
   case 'reopened':
   case 'synchronize':
   {
