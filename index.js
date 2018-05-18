@@ -1,9 +1,12 @@
+import assert from 'assert';
 import path from 'path';
 import WebhooksApi from '@octokit/webhooks';
 import createLogger from 'silk-log';
 import express from 'express';
 import github from 'octonode';
-import fetch from 'node-fetch';
+import {promisify} from 'es6-promisify';
+import createBuildKiteClient from 'buildnode';
+import AnsiToHtml from 'ansi-to-html';
 
 const log = createLogger('index');
 
@@ -11,12 +14,47 @@ const STATUS_CONTEXT = 'ci-gate';
 const CI_LABEL = 'CI';
 
 const envconst = {
+  /*
+    The buildkite token requires the following scopes:
+      * read_builds
+      * write_builds
+      * read_build_logs
+      * read_organizations
+      * read_pipelines
+   */
   BUILDKITE_TOKEN: null,
+
+  /*
+     The buildkite organization slug name to use
+   */
   BUILDKITE_ORG_SLUG: null,
+
+  /*
+     List of buildkite pipelines that may have their logs exposed to the public
+   */
+  BUILDKITE_PIPELINE_PUBLIC_LOG_WHITELIST: '', // comma separated, no spaces
+
+  /*
+     Github OAuth token with access to relative github projects.
+     TODO: document required scopes
+   */
   GITHUB_TOKEN: null,
+
+  /*
+     Default http port (used for local dev only normally)
+   */
   PORT: 5000,
+
+  /*
+     Public URL to this server
+   */
   PUBLIC_URL_ROOT: 'http://localhost:5000',
   GITHUB_WEBHOOK_SECRET: null,
+
+  /*
+     List of users without write access to the repo that should also be
+     automatically granted CI access
+   */
   CI_USER_WHITELIST: '', // comma separated, no spaces
 };
 
@@ -28,28 +66,28 @@ for (const v in envconst) {
 }
 
 const githubClient = github.client(envconst.GITHUB_TOKEN);
+const buildkiteClient = createBuildKiteClient({
+  accessToken: envconst.BUILDKITE_TOKEN
+});
+buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization);
+let buildkiteOrg;
 
-async function triggerBuildkiteCI(repoName, branch, prNumber, headSha) {
-  const url = `https://api.buildkite.com/v2/organizations/` +
-      `${envconst.BUILDKITE_ORG_SLUG}/pipelines/` +
-      `${path.basename(repoName)}/builds`;
 
-  log.info('fetch', url);
-  const response = await fetch(
-    url,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        branch,
-        commit: headSha,
-        message: `Pull Request #${prNumber}`,
-      }),
-      headers: {
-        'Authorization': `Bearer ${envconst.BUILDKITE_TOKEN}`,
-      },
-    }
-  );
-  log.info('fetch response:', response.status, response.statusText);
+async function triggerBuildkitePullRequestCI(
+  repoName, branch, prNumber, headSha
+) {
+  const pipelineName = path.basename(repoName);
+
+  const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
+  pipeline.createBuildAsync = promisify(pipeline.createBuild);
+
+  const newBuild = await pipeline.createBuildAsync({
+    branch,
+    commit: headSha,
+    message: `Pull Request #${prNumber}`,
+  });
+
+  log.info('createBuild result:', newBuild);
 }
 
 async function prSetLabel(repoName, prNumber, labelName) {
@@ -72,6 +110,11 @@ async function userInCiWhitelist(repoName, user) {
   return envconst.CI_USER_WHITELIST.split(',').includes(user);
 }
 
+function pipelineInPublicLogWhitelist(pipeline) {
+  const wl = envconst.BUILDKITE_PIPELINE_PUBLIC_LOG_WHITELIST;
+  return wl.split(',').includes(pipeline);
+}
+
 async function prRemoveLabel(repoName, prNumber, labelName) {
   log.info(`Removing label ${labelName} from ${repoName}#${prNumber}`);
   const issue = githubClient.issue(repoName, prNumber);
@@ -83,6 +126,30 @@ async function prRemoveLabel(repoName, prNumber, labelName) {
     }
   }
 }
+
+function isBuildkitePublicLogUrl(url) {
+  if (typeof(url) !== 'string') {
+    return false;
+  }
+
+  const orgUrlPrefix = `https://buildkite.com/${envconst.BUILDKITE_ORG_SLUG}/`;
+  if (!url.startsWith(orgUrlPrefix)) {
+    return false;
+  }
+
+  const buildInfo = url.slice(orgUrlPrefix.length);
+  const reMatch = buildInfo.match(/^([a-z-]+)\/builds\/([1-9[0-9]+)$/);
+  if (!reMatch) {
+    return false;
+  }
+  assert(reMatch.index === 0);
+  assert(reMatch.length === 3);
+
+  const pipeline = reMatch[1];
+  const buildNumber = Number(reMatch[2]);
+  return {pipeline, buildNumber};
+}
+
 
 async function onGithubStatusUpdate(payload) {
   log.info('onGithubStatusUpdate', payload);
@@ -98,7 +165,7 @@ async function onGithubStatusUpdate(payload) {
     target_url,
   } = payload;
 
-  if (target_url && target_url.startsWith(`https://buildkite.com/${envconst.BUILDKITE_ORG_SLUG}/`)) {
+  if (isBuildkitePublicLogUrl(target_url)) {
     const new_target_url = envconst.PUBLIC_URL_ROOT + '/buildkite_public_log?' + target_url;
     log.info('updating to', new_target_url);
     const repo = githubClient.repo(name);
@@ -151,7 +218,7 @@ async function onGithubPullRequest(payload) {
           'description': 'Pull Request accepted for test',
         });
         await prRemoveLabel(repoName, prNumber, CI_LABEL);
-        await triggerBuildkiteCI(repoName, branch, prNumber, headSha);
+        await triggerBuildkitePullRequestCI(repoName, branch, prNumber, headSha);
       }
     }
     break;
@@ -191,8 +258,57 @@ async function onGithub({id, name, payload}) {
 }
 
 
-function main() {
+async function onBuildKitePublicLogRequest(req, res) {
+  res.set('Content-Type', 'text/html');
+  const queryIndex = req.originalUrl.indexOf('?');
+  const url = (queryIndex >= 0) ? req.originalUrl.slice(queryIndex + 1) : '';
+  const buildInfo = isBuildkitePublicLogUrl(url);
+  if (!buildInfo) {
+    log.warn(`Invalid public log url:`, url);
+    res.status(400).send('');
+    return;
+  }
+  if (!pipelineInPublicLogWhitelist(buildInfo.pipeline)) {
+    log.warn(`Pipeline is not in whitelist:`, buildInfo.pipeline);
+    res.status(400).send('');
+    return;
+  }
+
+  let body = '';
+
+  const pipeline = await buildkiteOrg.getPipelineAsync(buildInfo.pipeline);
+  pipeline.listBuildsAsync = promisify(pipeline.listBuilds);
+
+  const builds = await pipeline.listBuildsAsync();
+  const build = builds.find(
+    (build) => build.number === buildInfo.buildNumber
+  );
+  if (!build) {
+    log.warn(`Build ${buildInfo.buildNumber} not found`);
+    res.status(400).send('');
+    return;
+  }
+
+  for (let job of build.jobs) {
+    body += `<h1>${job.name}</h1>`;
+    body += `<b>State:</b> ${job.data.state}<br/>`;
+    body += `<b>Command:</b> ${job.command}</br>`;
+    job.getLogAsync = promisify(job.getLog);
+    const jobLog = await job.getLogAsync();
+
+    const converter = new AnsiToHtml();
+    body += '<pre>' + converter.toHtml(jobLog.content) + '</pre>';
+  }
+
+  log.info('Emitting log for', url);
+  res.send(body);
+}
+
+async function main() {
   try {
+    buildkiteOrg = await buildkiteClient.getOrganizationAsync(envconst.BUILDKITE_ORG_SLUG);
+    buildkiteOrg.getPipelineAsync = promisify(buildkiteOrg.getPipeline);
+
     const webhooks = new WebhooksApi({
       secret: envconst.GITHUB_WEBHOOK_SECRET,
       path: '/github',
@@ -202,6 +318,8 @@ function main() {
     const app = express();
     app.use(webhooks.middleware);
     app.use(express.static(path.join(__dirname, 'public_html')));
+    app.get('/buildkite_public_log', onBuildKitePublicLogRequest);
+
     app.listen(envconst.PORT, () => log.info(`Listening on ${envconst.PORT}`));
   } catch (err) {
     log.error(err);
