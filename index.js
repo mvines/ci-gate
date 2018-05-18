@@ -15,6 +15,7 @@ const envconst = {
   BUILDKITE_ORG_SLUG: null,
   GITHUB_TOKEN: null,
   PORT: 5000,
+  PUBLIC_URL_ROOT: 'http://localhost:5000',
   GITHUB_WEBHOOK_SECRET: null,
   CI_USER_WHITELIST: '', // comma separated, no spaces
 };
@@ -85,7 +86,31 @@ async function prRemoveLabel(repoName, prNumber, labelName) {
 
 async function onGithubStatusUpdate(payload) {
   log.info('onGithubStatusUpdate', payload);
-  await Promise.resolve(); // pacify eslint
+
+  // Rewrite buildkite URLs to make the buildkite logs read-accessible to everybody
+  // (temporary hack until buildkite supports public logs)
+  const {
+    context,
+    description,
+    name,
+    sha,
+    state,
+    target_url,
+  } = payload;
+
+  if (target_url && target_url.startsWith(`https://buildkite.com/${envconst.BUILDKITE_ORG_SLUG}/`)) {
+    const new_target_url = envconst.PUBLIC_URL_ROOT + '/buildkite_public_log?' + target_url;
+    log.info('updating to', new_target_url);
+    const repo = githubClient.repo(name);
+    await repo.statusAsync(sha, {
+      state,
+      context: 'PUBLIC ' + context,
+      description,
+      target_url: new_target_url,
+    });
+  } else {
+    log.info(`Ignoring non-buildkite URL: ${target_url}`);
+  }
 }
 
 async function onGithubPullRequest(payload) {
