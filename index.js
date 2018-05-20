@@ -351,9 +351,7 @@ async function onBuildKitePublicLogRequest(req, res) {
       }
       body += `
         <b>Command:</b> <code>${job.command}</code></br>
-        <pre>
-          ${htmlConverter.toHtml(jobLog.content)}
-        </pre>
+        <pre>${htmlConverter.toHtml(jobLog.content)}</pre>
       `;
     }
   }
