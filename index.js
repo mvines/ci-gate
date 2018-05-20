@@ -171,7 +171,7 @@ async function onGithubStatusUpdate(payload) {
     const repo = githubClient.repo(name);
     await repo.statusAsync(sha, {
       state,
-      context: 'PUBLIC ' + context,
+      context: 'PUBLIC LOG: ' + context,
       description,
       target_url: new_target_url,
     });
