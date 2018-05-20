@@ -90,10 +90,12 @@ async function triggerBuildkitePullRequestCI(
   log.info('createBuild result:', newBuild);
 }
 
+/*
 async function prSetLabel(repoName, prNumber, labelName) {
   const issue = githubClient.issue(repoName, prNumber);
   await issue.addLabelsAsync([labelName]);
 }
+*/
 
 async function prHasLabel(repoName, prNumber, labelName) {
   const issue = githubClient.issue(repoName, prNumber);
@@ -199,7 +201,7 @@ async function onGithubPullRequest(payload) {
     const user = payload.sender.login;
 
     if (userInCiWhitelist(repoName, user)) {
-      await prSetLabel(repoName, prNumber, CI_LABEL);
+      await triggerBuildkitePullRequestCI(repoName, branch, prNumber, headSha);
     } else {
       await repo.statusAsync(headSha, {
         'state': 'pending',
