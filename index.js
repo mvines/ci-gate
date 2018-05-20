@@ -259,6 +259,18 @@ async function onGithub({id, name, payload}) {
   }
 }
 
+function buildKiteStateStyle(state) {
+  switch (state) {
+  case 'running':
+    return 'color:orange;';
+  case 'failed':
+    return 'color:red;';
+  case 'passed':
+    return 'color:green;';
+  default:
+    return 'color:black;';
+  }
+}
 
 async function onBuildKitePublicLogRequest(req, res) {
   res.set('Content-Type', 'text/html');
@@ -276,8 +288,6 @@ async function onBuildKitePublicLogRequest(req, res) {
     return;
   }
 
-  let body = '';
-
   const pipeline = await buildkiteOrg.getPipelineAsync(buildInfo.pipeline);
   pipeline.listBuildsAsync = promisify(pipeline.listBuilds);
 
@@ -291,19 +301,65 @@ async function onBuildKitePublicLogRequest(req, res) {
     return;
   }
 
-  for (let job of build.jobs) {
-    body += `<h1>${job.name}</h1>`;
-    body += `<b>State:</b> ${job.data.state}<br/>`;
-    body += `<b>Command:</b> ${job.command}</br>`;
-    job.getLogAsync = promisify(job.getLog);
-    const jobLog = await job.getLogAsync();
+  // Filter out job names without the text '[public]' in their description
+  const jobs = build.jobs.filter((job) => job.name.includes('[public]'));
 
-    const converter = new AnsiToHtml();
-    body += '<pre>' + converter.toHtml(jobLog.content) + '</pre>';
+  let header = `
+    <h2>${build.message}</h2>
+    <b>State:</b>
+      <span style="${buildKiteStateStyle(build.state)}">
+        ${build.state}
+      </span>
+      <br/>
+  `;
+  let body = '';
+
+  if (jobs.length > 0) {
+    const brief = jobs.length === 1;
+
+    if (!brief) {
+      header += `
+        <b>Steps:</b>
+        <ol>
+      `;
+      body += '</ol>';
+    }
+    const htmlConverter = new AnsiToHtml();
+    for (let job of jobs) {
+      const jobName = job.name.replace(/\[public\]/gi, '').trim();
+      const jobNameUri = encodeURI(jobName);
+      job.getLogAsync = promisify(job.getLog);
+      const jobLog = await job.getLogAsync();
+
+      if (!brief) {
+        header += `
+          <li>
+            <a href="#${jobNameUri}">${jobName}</a>
+            <span style="${buildKiteStateStyle(build.state)}">
+              ${job.data.state}
+            </span>
+          </li>
+        `;
+        body += `
+          <hr><h3><a name="${jobNameUri}">${jobName}</a></h3>
+          <b>State:</b>
+              <span style="${buildKiteStateStyle(build.state)}">
+                ${job.data.state}
+              </span>
+            <br/>
+        `;
+      }
+      body += `
+        <b>Command:</b> <code>${job.command}</code></br>
+        <pre>
+          ${htmlConverter.toHtml(jobLog.content)}
+        </pre>
+      `;
+    }
   }
 
   log.info('Emitting log for', url);
-  res.send(body);
+  res.send(header + body);
 }
 
 async function main() {
