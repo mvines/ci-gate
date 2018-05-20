@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/mvines/ci-gate.svg?branch=master)](https://travis-ci.org/mvines/ci-gate)
 
 Gates access to the CI system for Github pull requests.  Authorized users get
 immediate CI service.  Pull Requests from 3rd party users only enter CI once the
