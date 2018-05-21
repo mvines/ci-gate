@@ -83,8 +83,10 @@ async function triggerBuildkitePullRequestCI(
 
   const newBuild = await pipeline.createBuildAsync({
     branch: `pull/${prNumber}/head`,
-    commit: headSha,
-    message: `Pull Request #${prNumber}`,
+    commit: 'HEAD', /* Can't use 'headSha' unfortunately because buildkite agent
+                       does not correctly |git fetch| pull/ branch refs when
+                       triggered by the API */
+    message: `Pull Request #${prNumber} - ${headSha.substring(0, 8)}`,
   });
 
   log.info('createBuild result:', newBuild);
