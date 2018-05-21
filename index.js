@@ -73,9 +73,17 @@ buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization
 let buildkiteOrg;
 
 
-async function triggerBuildkitePullRequestCI(
+async function triggerPullRequestCI(
   repoName, branch, prNumber, headSha
 ) {
+  const repo = githubClient.repo(repoName);
+  await repo.statusAsync(headSha, {
+    'state': 'success',
+    'context': STATUS_CONTEXT,
+    'description': 'Pull Request accepted for test',
+  });
+  await prRemoveLabel(repoName, prNumber, CI_LABEL);
+
   const pipelineName = path.basename(repoName);
 
   const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
@@ -203,7 +211,7 @@ async function onGithubPullRequest(payload) {
     const user = payload.sender.login;
 
     if (userInCiWhitelist(repoName, user)) {
-      await triggerBuildkitePullRequestCI(repoName, branch, prNumber, headSha);
+      await triggerPullRequestCI(repoName, branch, prNumber, headSha);
     } else {
       await repo.statusAsync(headSha, {
         'state': 'pending',
@@ -216,13 +224,7 @@ async function onGithubPullRequest(payload) {
   case 'labeled':
     if (!merged) {
       if (prHasLabel(repoName, prNumber, CI_LABEL)) {
-        await repo.statusAsync(headSha, {
-          'state': 'success',
-          'context': STATUS_CONTEXT,
-          'description': 'Pull Request accepted for test',
-        });
-        await prRemoveLabel(repoName, prNumber, CI_LABEL);
-        await triggerBuildkitePullRequestCI(repoName, branch, prNumber, headSha);
+        await triggerPullRequestCI(repoName, branch, prNumber, headSha);
       }
     }
     break;
