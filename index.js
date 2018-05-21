@@ -80,7 +80,7 @@ async function triggerPullRequestCI(
   await repo.statusAsync(headSha, {
     'state': 'success',
     'context': STATUS_CONTEXT,
-    'description': 'Pull Request accepted for test',
+    'description': 'Pull Request accepted for CI',
   });
   await prRemoveLabel(repoName, prNumber, CI_LABEL);
 
