@@ -82,7 +82,7 @@ async function triggerBuildkitePullRequestCI(
   pipeline.createBuildAsync = promisify(pipeline.createBuild);
 
   const newBuild = await pipeline.createBuildAsync({
-    branch,
+    branch: `pull/${prNumber}/head`,
     commit: headSha,
     message: `Pull Request #${prNumber}`,
   });
