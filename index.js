@@ -306,7 +306,7 @@ async function onBuildKitePublicLogRequest(req, res) {
   }
 
   // Filter out job names without the text '[public]' in their description
-  const jobs = build.jobs.filter((job) => job.name.includes('[public]'));
+  const jobs = build.jobs.filter((job) => job.name && job.name.includes('[public]'));
 
   let header = `
     <h2>${build.message}</h2>
