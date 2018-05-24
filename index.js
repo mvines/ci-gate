@@ -307,8 +307,7 @@ async function onBuildKitePublicLogRequest(req, res) {
     return;
   }
 
-  // Filter out job names without the text '[public]' in their description
-  const jobs = build.jobs.filter((job) => job.name && job.name.includes('[public]'));
+  const jobs = build.jobs.filter((job) => job.name);
 
   let header = `
     <h2>${build.message}</h2>
@@ -335,7 +334,13 @@ async function onBuildKitePublicLogRequest(req, res) {
       const jobName = job.name.replace(/\[public\]/gi, '').trim();
       const jobNameUri = encodeURI(jobName);
       job.getLogAsync = promisify(job.getLog);
-      const jobLog = await job.getLogAsync();
+
+      let jobLog = {
+        content: 'Log not available',
+      };
+      if (job.name.includes('[public]')) {
+        jobLog = await job.getLogAsync();
+      }
 
       if (!brief) {
         header += `
