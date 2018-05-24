@@ -77,12 +77,6 @@ async function triggerPullRequestCI(
   repoName, branch, prNumber, headSha
 ) {
   const repo = githubClient.repo(repoName);
-  await repo.statusAsync(headSha, {
-    'state': 'success',
-    'context': STATUS_CONTEXT,
-    'description': 'Pull Request accepted for CI',
-  });
-  await prRemoveLabel(repoName, prNumber, CI_LABEL);
 
   const pipelineName = path.basename(repoName);
 
@@ -97,6 +91,13 @@ async function triggerPullRequestCI(
     message: `Pull Request #${prNumber} - ${headSha.substring(0, 8)}`,
   });
 
+  await repo.statusAsync(headSha, {
+    'state': 'success',
+    'context': STATUS_CONTEXT,
+    'description': 'Pull Request accepted for CI',
+  });
+
+  await prRemoveLabel(repoName, prNumber, CI_LABEL);
   log.info('createBuild result:', newBuild);
 }
 
@@ -133,9 +134,10 @@ async function prRemoveLabel(repoName, prNumber, labelName) {
   try {
     await issue.removeLabelAsync(labelName);
   } catch (err) {
-    if (err.message !== 'Label does not exist') {
-      throw err;
-    }
+    log.warn(
+      `Error removing label ${labelName} from ${repoName}#${prNumber}`,
+      err.message
+    );
   }
 }
 
