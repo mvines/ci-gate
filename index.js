@@ -269,6 +269,7 @@ function buildKiteStateStyle(state) {
   switch (state) {
   case 'running':
     return 'color:orange;';
+  case 'waiting_failed':
   case 'failed':
     return 'color:red;';
   case 'passed':
