@@ -346,7 +346,7 @@ async function onBuildKitePublicLogRequest(req, res) {
         header += `
           <li>
             <a href="#${jobNameUri}">${jobName}</a>
-            <span style="${buildKiteStateStyle(build.state)}">
+            <span style="${buildKiteStateStyle(job.data.state)}">
               ${job.data.state}
             </span>
           </li>
@@ -354,7 +354,7 @@ async function onBuildKitePublicLogRequest(req, res) {
         body += `
           <hr><h3><a name="${jobNameUri}">${jobName}</a></h3>
           <b>State:</b>
-              <span style="${buildKiteStateStyle(build.state)}">
+              <span style="${buildKiteStateStyle(job.data.state)}">
                 ${job.data.state}
               </span>
             <br/>
