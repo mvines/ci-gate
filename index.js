@@ -178,12 +178,13 @@ async function onGithubStatusUpdate(payload) {
   } = payload;
 
   if (isBuildkitePublicLogUrl(target_url)) {
+    // Overwrite the buildkite status url with the public log equivalent
     const new_target_url = envconst.PUBLIC_URL_ROOT + '/buildkite_public_log?' + target_url;
     log.info('updating to', new_target_url);
     const repo = githubClient.repo(name);
     await repo.statusAsync(sha, {
       state,
-      context: 'PUBLIC LOG: ' + context,
+      context,
       description,
       target_url: new_target_url,
     });
@@ -320,6 +321,7 @@ async function onBuildKitePublicLogRequest(req, res) {
         ${build.state}
       </span>
       <br/>
+    <b>Buildkite Log:</b> <a href="${build.data.web_url}"/>link</a></br>
   `;
   let body = '';
   const footer = '</body></html>';
