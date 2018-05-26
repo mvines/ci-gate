@@ -433,10 +433,21 @@ async function onBuildKitePublicLogRequest(req, res) {
       job.getLogAsync = promisify(job.getLog);
       const jobHumanTime = buildkiteHumanTimeInfo(job.data);
 
-      let jobLog = '<br><i>Inline log not available</i>';
+      let jobLog = '<br><i>Build log not available</i>';
       if (job.name.includes('[public]')) {
         const l = await job.getLogAsync();
-        jobLog = `<pre>${htmlConverter.toHtml(l.content)}</pre>`;
+        if (l.content.length > 0) {
+          jobLog = `<pre>${htmlConverter.toHtml(l.content)}</pre>`;
+        }
+
+        if (job.data.state === 'running') {
+          jobLog += `
+            <img style='vertical-align:middle;' src='spinner.gif'>
+            <div style='color:orange; vertical-align:middle; display:inline;'>
+              <i>Job running, refresh page manually for updates...</i>
+            </div>
+          `;
+        }
       }
 
       if (!brief) {
