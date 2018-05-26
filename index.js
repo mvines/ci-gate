@@ -293,11 +293,12 @@ function buildkiteHumanTimeInfo(buildData) {
   let description = '';
   switch (buildData.state) {
   case 'scheduled':
+  case 'waiting':
   {
     assert(typeof buildData.scheduled_at === 'string');
     const scheduledTime = moment.utc(buildData.scheduled_at);
     scheduledTime.local();
-    description = 'scheduled at ' + scheduledTime.format('HH:mm:ss on dddd');
+    description = 'waiting since ' + scheduledTime.format('HH:mm:ss on dddd');
     break;
   }
   case 'blocked':
