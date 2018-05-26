@@ -18,6 +18,19 @@ If you'd like to use ci-gate for your github project:
 2. Check ci-gate server log file to ensure a github "ping" event was received,
    indicating the webhook was successfully created
 
+### Buildkite Configuration
+
+Ensure the following is added to `/etc/buildkite-agent/hooks/environment` for
+each build agent:
+```sh
+if [[ $BUILDKITE_BRANCH =~ pull/* ]]; then
+  export BUILDKITE_REFSPEC="+$BUILDKITE_BRANCH:refs/remotes/origin/$BUILDKITE_BRANCH"
+  echo $BUILDKITE_REFSPEC
+fi
+```
+This workaround is necessary to enable the buildkite API to successfully create
+a new pipeline from a pull request branch (`pull/123/head`).
+
 ### Heroku Config
 
 TODO...see env vars in index.js
