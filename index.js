@@ -270,6 +270,9 @@ async function onGithub({id, name, payload}) {
 
 function buildKiteStateStyle(state) {
   switch (state) {
+  case 'scheduled':
+  case 'waiting':
+    return 'color:gray;';
   case 'running':
     return 'color:orange;';
   case 'canceled':
