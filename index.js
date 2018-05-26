@@ -364,11 +364,11 @@ async function onBuildKitePublicLogRequest(req, res) {
               ${job.data.state}
             </span>
           <br/>
+          <b>Buildkite Log:</b> <a href="${job.data.web_url}"/>link</a></br>
         `;
       }
       body += `
         <b>Command:</b> <code>${job.command}</code></br>
-        <b>Buildkite Log:</b> <a href="${job.data.web_url}"/>link</a></br>
         ${jobLog}
       `;
     }
