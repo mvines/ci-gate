@@ -7,6 +7,7 @@ import github from 'octonode';
 import {promisify} from 'es6-promisify';
 import createBuildKiteClient from 'buildnode';
 import AnsiToHtml from 'ansi-to-html';
+import moment from 'moment';
 
 const log = createLogger('index');
 
@@ -268,22 +269,78 @@ async function onGithub({id, name, payload}) {
   }
 }
 
-function buildKiteStateStyle(state) {
-  switch (state) {
+function buildkiteStateStyle(state) {
+  const colorByState = {
+    blocked: 'gray',
+    canceled: 'red',
+    failed: 'red',
+    passed: 'green',
+    running: 'orange',
+    scheduled: 'gray',
+    waiting: 'gray',
+    waiting_failed: 'red',
+  };
+  assert(
+    typeof colorByState[state] === 'string',
+    `Missing state in colorByState: ${state}`
+  );
+  return `font-weight: bold; color: ${colorByState[state]};`;
+}
+
+function buildkiteHumanTimeInfo(buildData) {
+  assert(typeof buildData.state === 'string');
+
+  let description = '';
+  switch (buildData.state) {
   case 'scheduled':
-  case 'waiting':
-    return 'color:gray;';
+  {
+    assert(typeof buildData.scheduled_at === 'string');
+    const scheduledTime = moment.utc(buildData.scheduled_at);
+    scheduledTime.local();
+    description = 'scheduled at ' + scheduledTime.format('HH:mm:ss on dddd');
+    break;
+  }
+  case 'blocked':
+  {
+    description = 'Blocked';
+    break;
+  }
   case 'running':
-    return 'color:orange;';
+  {
+    assert(typeof buildData.scheduled_at === 'string');
+    assert(typeof buildData.started_at === 'string');
+    const startedTime = moment.utc(buildData.started_at);
+    startedTime.local();
+    description = 'running since ' + startedTime.format('HH:mm:ss on dddd');
+    break;
+  }
   case 'canceled':
   case 'failed':
-  case 'waiting_failed':
-    return 'color:red;';
   case 'passed':
-    return 'color:green;';
-  default:
-    return 'color:black;';
+  {
+    assert(typeof buildData.scheduled_at === 'string');
+    assert(typeof buildData.started_at === 'string');
+    assert(typeof buildData.finished_at === 'string');
+    const scheduledTime = moment.utc(buildData.scheduled_at);
+    const startedTime = moment.utc(buildData.started_at);
+    const finishedTime = moment.utc(buildData.finished_at);
+
+    scheduledTime.local();
+    startedTime.local();
+    finishedTime.local();
+    const runDuration = moment.duration(finishedTime.diff(startedTime));
+    const waitDuration = moment.duration(startedTime.diff(scheduledTime));
+
+    description = 'ran for ' + runDuration.humanize();
+    if (waitDuration.minutes() > 0) {
+      description += ', queued for ' + waitDuration.humanize();
+    }
+    break;
   }
+  default:
+    throw new Error(`Unknown state: ${buildData.state}`);
+  }
+  return description;
 }
 
 async function onBuildKitePublicLogRequest(req, res) {
@@ -326,7 +383,7 @@ async function onBuildKitePublicLogRequest(req, res) {
       branchHtml = `
         <a
           href="https://github.com/${repository}/pull/${prNumber}"
-        >${branchHtml}</a>
+        >#${prNumber}</a>
       `;
     } else {
       branchHtml = `
@@ -347,9 +404,10 @@ async function onBuildKitePublicLogRequest(req, res) {
     <body>
     <h2>${build.message}</h2>
     <b>State:</b>
-      <span style="${buildKiteStateStyle(build.state)}">
+      <span style="${buildkiteStateStyle(build.state)}">
         ${build.state}
       </span>
+      - <i>${buildkiteHumanTimeInfo(build.data)}</i>
       <br/>
     <b>Branch:</b> ${branchHtml}</br>
     <b>Buildkite Log:</b> <a href="${build.data.web_url}"/>link</a></br>
@@ -372,6 +430,7 @@ async function onBuildKitePublicLogRequest(req, res) {
       const jobName = job.name.replace(/\[public\]/gi, '').trim();
       const jobNameUri = encodeURI(jobName);
       job.getLogAsync = promisify(job.getLog);
+      const jobHumanTime = buildkiteHumanTimeInfo(job.data);
 
       let jobLog = '<br><i>Inline log not available</i>';
       if (job.name.includes('[public]')) {
@@ -382,18 +441,20 @@ async function onBuildKitePublicLogRequest(req, res) {
       if (!brief) {
         header += `
           <li>
-            <a href="#${jobNameUri}">${jobName}</a>
-            <span style="${buildKiteStateStyle(job.data.state)}">
+            <span style="${buildkiteStateStyle(job.data.state)}">
               ${job.data.state}
             </span>
+            - <a href="#${jobNameUri}">${jobName}</a>
+            - <i>${jobHumanTime}</i>
           </li>
         `;
         body += `
           <hr><h3><a name="${jobNameUri}">${jobName}</a></h3>
           <b>State:</b>
-            <span style="${buildKiteStateStyle(job.data.state)}">
+            <span style="${buildkiteStateStyle(job.data.state)}">
               ${job.data.state}
             </span>
+            - <i>${jobHumanTime}</i>
           <br/>
           <b>Buildkite Log:</b> <a href="${job.data.web_url}"/>link</a></br>
         `;
