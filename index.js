@@ -311,6 +311,11 @@ async function onBuildKitePublicLogRequest(req, res) {
   const jobs = build.jobs.filter((job) => job.name);
 
   let header = `
+    <html>
+    <head>
+      <title>${build.message}</title>
+    </head>
+    <body>
     <h2>${build.message}</h2>
     <b>State:</b>
       <span style="${buildKiteStateStyle(build.state)}">
@@ -319,6 +324,7 @@ async function onBuildKitePublicLogRequest(req, res) {
       <br/>
   `;
   let body = '';
+  const footer = '</body></html>';
 
   if (jobs.length > 0) {
     const brief = jobs.length === 1;
@@ -336,11 +342,10 @@ async function onBuildKitePublicLogRequest(req, res) {
       const jobNameUri = encodeURI(jobName);
       job.getLogAsync = promisify(job.getLog);
 
-      let jobLog = {
-        content: 'Log not available',
-      };
+      let jobLog = '<br><i>Inline log not available</i>';
       if (job.name.includes('[public]')) {
-        jobLog = await job.getLogAsync();
+        const l = await job.getLogAsync();
+        jobLog = `<pre>${htmlConverter.toHtml(l.content)}</pre>`;
       }
 
       if (!brief) {
@@ -355,21 +360,22 @@ async function onBuildKitePublicLogRequest(req, res) {
         body += `
           <hr><h3><a name="${jobNameUri}">${jobName}</a></h3>
           <b>State:</b>
-              <span style="${buildKiteStateStyle(job.data.state)}">
-                ${job.data.state}
-              </span>
-            <br/>
+            <span style="${buildKiteStateStyle(job.data.state)}">
+              ${job.data.state}
+            </span>
+          <br/>
         `;
       }
       body += `
         <b>Command:</b> <code>${job.command}</code></br>
-        <pre>${htmlConverter.toHtml(jobLog.content)}</pre>
+        <b>Buildkite Log:</b> <a href="${job.data.web_url}"/>link</a></br>
+        ${jobLog}
       `;
     }
   }
 
   log.info('Emitting log for', url);
-  res.send(header + body);
+  res.send(header + body + footer);
 }
 
 async function main() {
