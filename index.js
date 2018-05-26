@@ -315,6 +315,28 @@ async function onBuildKitePublicLogRequest(req, res) {
     return;
   }
 
+  const {provider} = build.data.pipeline;
+  let branchHtml = build.branch;
+  if (provider.id === 'github') {
+    const {repository} = provider.settings;
+
+    const prMatch = build.branch.match(/^pull\/([1-9[0-9]+)\/head$/);
+    if (prMatch) {
+      const prNumber = prMatch[1];
+      branchHtml = `
+        <a
+          href="https://github.com/${repository}/pull/${prNumber}"
+        >${branchHtml}</a>
+      `;
+    } else {
+      branchHtml = `
+        <a
+          href="https://github.com/${repository}/tree/${build.branch}"
+        >${branchHtml}</a>
+      `;
+    }
+  }
+
   const jobs = build.jobs.filter((job) => job.name);
 
   let header = `
@@ -329,6 +351,7 @@ async function onBuildKitePublicLogRequest(req, res) {
         ${build.state}
       </span>
       <br/>
+    <b>Branch:</b> ${branchHtml}</br>
     <b>Buildkite Log:</b> <a href="${build.data.web_url}"/>link</a></br>
   `;
   let body = '';
