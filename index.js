@@ -73,10 +73,12 @@ buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization
 let buildkiteOrg;
 
 
-async function triggerPullRequestCI(
-  repoName, branch, prNumber, headSha
-) {
+async function triggerPullRequestCI(repoName, prNumber, commit) {
   const repo = githubClient.repo(repoName);
+  const branch = `pull/${prNumber}/head`;
+  const message = `Pull Request #${prNumber} - ${commit.substring(0, 8)}`;
+
+  log.info(`Triggering pull request: ${repo}:${branch} at ${commit}`);
 
   const pipelineName = path.basename(repoName);
 
@@ -84,16 +86,19 @@ async function triggerPullRequestCI(
   pipeline.createBuildAsync = promisify(pipeline.createBuild);
 
   const newBuild = await pipeline.createBuildAsync({
-    branch: `pull/${prNumber}/head`,
-    commit: headSha,
-    message: `Pull Request #${prNumber} - ${headSha.substring(0, 8)}`,
+    branch,
+    commit,
+    message,
   });
 
-  await repo.statusAsync(headSha, {
-    'state': 'success',
-    'context': STATUS_CONTEXT,
-    'description': 'Pull Request accepted for CI',
-  });
+  await repo.statusAsync(
+    commit,
+    {
+      'state': 'success',
+      'context': STATUS_CONTEXT,
+      'description': 'Pull Request accepted for CI',
+    }
+  );
 
   await prRemoveLabel(repoName, prNumber, CI_LABEL);
   log.info('createBuild result:', newBuild);
@@ -199,7 +204,6 @@ async function onGithubPullRequest(payload) {
   const {pull_request} = payload;
   const headSha = pull_request.head.sha;
   const merged = pull_request.merged;
-  const branch = pull_request.base.ref;
   const repo = githubClient.repo(repoName);
 
   log.info(payload.action, headSha, prNumber, repoName);
@@ -212,7 +216,7 @@ async function onGithubPullRequest(payload) {
     const user = payload.sender.login;
 
     if (userInCiWhitelist(repoName, user)) {
-      await triggerPullRequestCI(repoName, branch, prNumber, headSha);
+      await triggerPullRequestCI(repoName, prNumber, headSha);
     } else {
       await repo.statusAsync(headSha, {
         'state': 'pending',
@@ -225,7 +229,7 @@ async function onGithubPullRequest(payload) {
   case 'labeled':
     if (!merged) {
       if (prHasLabel(repoName, prNumber, CI_LABEL)) {
-        await triggerPullRequestCI(repoName, branch, prNumber, headSha);
+        await triggerPullRequestCI(repoName, prNumber, headSha);
       }
     }
     break;
@@ -268,8 +272,9 @@ function buildKiteStateStyle(state) {
   switch (state) {
   case 'running':
     return 'color:orange;';
-  case 'waiting_failed':
+  case 'canceled':
   case 'failed':
+  case 'waiting_failed':
     return 'color:red;';
   case 'passed':
     return 'color:green;';
