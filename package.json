@@ -11,8 +11,7 @@
     "npm": "^5.6.0"
   },
   "scripts": {
-    "postinstall": "set -e; babel-node version-check.js; npm run patch",
-    "patch": "set -e; cd node_modules/octonode; test -f .patch || (patch --forward -p1 < ../../patch/node_modules/octonode/0001-Support-all-Pull-Request-merge-parameters.patch; touch .patch)",
+    "postinstall": "scripts/postinstall.sh",
     "start": "babel-node index.js",
     "lint": "eslint --no-ignore . .eslintrc.js",
     "lintf": "npm run lint -- --fix",
@@ -20,7 +19,6 @@
   },
   "dependencies": {
     "@octokit/webhooks": "^4.0.0",
-    "ansi-to-html": "^0.6.4",
     "babel-cli": "^6.26.0",
     "babel-plugin-transform-class-properties": "^6.24.1",
     "babel-preset-env": "^1.6.1",

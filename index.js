@@ -6,7 +6,6 @@ import express from 'express';
 import github from 'octonode';
 import {promisify} from 'es6-promisify';
 import createBuildKiteClient from 'buildnode';
-import AnsiToHtml from 'ansi-to-html';
 import moment from 'moment';
 
 const log = createLogger('index');
@@ -533,6 +532,7 @@ async function onBuildKitePublicLogRequest(req, res) {
     <html>
     <head>
       <title>${build.message}</title>
+      <link rel="stylesheet" type="text/css" href="/terminal.css" />
     </head>
     <body>
     <h2>${build.message}</h2>
@@ -558,18 +558,17 @@ async function onBuildKitePublicLogRequest(req, res) {
       `;
       body += '</ol>';
     }
-    const htmlConverter = new AnsiToHtml();
     for (let job of jobs) {
       const jobName = job.name.replace(/\[public\]/gi, '').trim();
       const jobNameUri = encodeURI(jobName);
-      job.getLogAsync = promisify(job.getLog);
+      job.getLogHtmlAsync = promisify(job.getLogHtml);
       const jobHumanTime = buildkiteHumanTimeInfo(job.data);
 
       let jobLog = '<br><i>Build log not available</i>';
       if (job.name.includes('[public]')) {
-        const l = await job.getLogAsync();
-        if (l.content.length > 0) {
-          jobLog = `<pre>${htmlConverter.toHtml(l.content)}</pre>`;
+        const html = await job.getLogHtmlAsync();
+        if (html.length > 0) {
+          jobLog = `<div class="term-container">${html}</div>`;
         }
 
         if (job.data.state === 'running') {
