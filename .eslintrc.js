@@ -15,6 +15,9 @@ module.exports = { // eslint-disable-line import/no-commonjs
     'ecmaVersion': 8,
   },
   'rules': {
+    'no-trailing-spaces': [
+      'error',
+    ],
     'import/first': [
       'error',
     ],

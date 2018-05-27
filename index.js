@@ -13,6 +13,7 @@ const log = createLogger('index');
 
 const STATUS_CONTEXT = 'ci-gate';
 const CI_LABEL = 'CI';
+const AUTOMERGE_LABEL = 'automerge';
 
 const envconst = {
   /*
@@ -36,8 +37,11 @@ const envconst = {
   BUILDKITE_PIPELINE_PUBLIC_LOG_WHITELIST: '', // comma separated, no spaces
 
   /*
-     Github OAuth token with access to relative github projects.
-     TODO: document required scopes
+     Github OAuth token with access to the relevant github projects with the
+     required scopes:
+     * repo:status
+     * repo_deployment
+     * public_repo
    */
   GITHUB_TOKEN: null,
 
@@ -50,6 +54,10 @@ const envconst = {
      Public URL to this server
    */
   PUBLIC_URL_ROOT: 'http://localhost:5000',
+
+  /*
+     Secret string added in the Github webhook configuration
+   */
   GITHUB_WEBHOOK_SECRET: null,
 
   /*
@@ -79,7 +87,7 @@ async function triggerPullRequestCI(repoName, prNumber, commit) {
   const branch = `pull/${prNumber}/head`;
   const message = `Pull Request #${prNumber} - ${commit.substring(0, 8)}`;
 
-  log.info(`Triggering pull request: ${repo}:${branch} at ${commit}`);
+  log.info(`Triggering pull request: ${repoName}:${branch} at ${commit}`);
 
   const pipelineName = path.basename(repoName);
 
@@ -125,6 +133,113 @@ async function userInCiWhitelist(repoName, user) {
     return true;
   }
   return envconst.CI_USER_WHITELIST.split(',').includes(user);
+}
+
+async function handleCommitsPushedToPullRequest(repoName, prNumber) {
+  const repo = githubClient.repo(repoName);
+  const issue = repo.issue(prNumber);
+
+  if (!await prHasLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
+    log.debug(`handleCommitsPushedToPullRequest: ${AUTOMERGE_LABEL} label is not set`);
+    return;
+  }
+
+  await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL);
+  const body = ':scream: New commits were pushed while the automerge label was present.';
+  log.info(body);
+  await issue.createCommentAsync({body});
+}
+
+async function autoMergePullRequest(repoName, prNumber) {
+  const repo = githubClient.repo(repoName);
+  const pr = repo.pr(prNumber);
+  const issue = repo.issue(prNumber);
+  const info = await pr.infoAsync();
+  assert(typeof info === 'object');
+  const {state, mergeable, head} = info[0];
+
+  if (state !== 'open') {
+    return;
+  }
+
+  if (!await prHasLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
+    log.debug(`autoMergePullRequest: ${AUTOMERGE_LABEL} label is not set`);
+    return;
+  }
+
+  if (mergeable === null) {
+    // https://developer.github.com/v3/pulls/#response-1
+    log.debug(`mergeable state is not yet known.`);
+    return;
+  }
+
+  if (mergeable === false) {
+    const body = ':broken_heart: Unable to automerge due to merge conflict';
+    log.info(body);
+    await issue.createCommentAsync({body});
+    await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL);
+    return;
+  }
+
+  // Check the CI status of the head SHA
+  log.debug(`fetching CI status for head SHA ${head.sha}`);
+  const status = (await repo.combinedStatusAsync(head.sha))[0];
+  log.info(`CI status: ${status.state} with ${status.statuses.length} statuses`);
+  log.debug('All statuses:', status.statuses);
+
+  switch (status.state) {
+  case 'success':
+  {
+    if (status.statuses.length < 2) {
+      log.warn(`Refusing to automerge with no evidence of success`);
+    } else {
+      log.info(`CI status is success, trying to merge...`);
+      const mergeResult = await pr.mergeAsync({
+        sha: head.sha,
+        commit_message: 'automerge',
+        merge_method: 'rebase',
+      });
+      log.info(`successfully merged`, mergeResult);
+    }
+    break;
+  }
+
+  case 'failure':
+  {
+    const body = ':broken_heart: Unable to automerge due to CI failure';
+    log.info(body);
+    await issue.createCommentAsync({body});
+    await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL);
+    break;
+  }
+
+  default:
+    break;
+  }
+}
+
+async function autoMergePullRequests(repoName) {
+  log.info(`autoMergePullRequests for ${repoName}...`);
+
+  const openPrs = await new Promise((resolve, reject) => {
+    const repo = githubClient.repo(repoName);
+    repo.prs((err, pulls) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(
+        pulls.filter((pull) => {
+          return pull.state === 'open';
+        })
+      );
+    });
+  });
+
+  for (let openPr of openPrs) {
+    log.info(`Processing #${openPr.number} ${openPr.title}`);
+    await autoMergePullRequest(repoName, openPr.number);
+  }
 }
 
 function pipelineInPublicLogWhitelist(pipeline) {
@@ -197,6 +312,19 @@ async function onGithubStatusUpdate(payload) {
   } else {
     log.info(`Ignoring non-buildkite URL: ${target_url}`);
   }
+
+  // Check if any PRs in this repo should be merged, as unfortunately the status
+  // API provides no link from commit status to the corresponding pull request
+  await autoMergePullRequests(name);
+}
+
+async function onGithubPullRequestReview(payload) {
+  const {action, review, pull_request} = payload;
+  const prNumber = pull_request.number;
+  const repoName = pull_request.head.repo.full_name;
+
+  log.info(`onGithubPullRequestReview ${action} on ${repoName}#{prNumber}`, review);
+  await autoMergePullRequest(repoName, prNumber);
 }
 
 async function onGithubPullRequest(payload) {
@@ -209,13 +337,15 @@ async function onGithubPullRequest(payload) {
 
   log.info(payload.action, headSha, prNumber, repoName);
   switch (payload.action) {
+  case 'synchronize':
+    handleCommitsPushedToPullRequest(repoName, prNumber);
+    //fall through
   case 'opened':
   case 'reopened':
-  case 'synchronize':
   {
     await prRemoveLabel(repoName, prNumber, CI_LABEL);
-    const user = payload.sender.login;
 
+    const user = payload.sender.login;
     if (userInCiWhitelist(repoName, user)) {
       await triggerPullRequestCI(repoName, prNumber, headSha);
     } else {
@@ -229,9 +359,10 @@ async function onGithubPullRequest(payload) {
   }
   case 'labeled':
     if (!merged) {
-      if (prHasLabel(repoName, prNumber, CI_LABEL)) {
+      if (await prHasLabel(repoName, prNumber, CI_LABEL)) {
         await triggerPullRequestCI(repoName, prNumber, headSha);
       }
+      await autoMergePullRequest(repoName, prNumber);
     }
     break;
   default:
@@ -258,6 +389,7 @@ async function onGithub({id, name, payload}) {
       'pull_request': onGithubPullRequest,
       'push': onGithubPush,
       'status': onGithubStatusUpdate,
+      'pull_request_review': onGithubPullRequestReview,
     };
     if (hooks[name]) {
       await hooks[name](payload);
