@@ -91,25 +91,30 @@ async function triggerPullRequestCI(repoName, prNumber, commit) {
   const pipelineName = path.basename(repoName);
 
   const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
-  pipeline.createBuildAsync = promisify(pipeline.createBuild);
 
-  const newBuild = await pipeline.createBuildAsync({
-    branch,
-    commit,
-    message,
-  });
+  let description = `${pipelineName} CI pipeline not present`;
+  if (pipeline) {
+    pipeline.createBuildAsync = promisify(pipeline.createBuild);
+
+    const newBuild = await pipeline.createBuildAsync({
+      branch,
+      commit,
+      message,
+    });
+    description = 'Pull Request accepted for CI';
+    log.info('createBuild result:', newBuild);
+  }
 
   await repo.statusAsync(
     commit,
     {
-      'state': 'success',
-      'context': STATUS_CONTEXT,
-      'description': 'Pull Request accepted for CI',
+      state: 'success',
+      context: STATUS_CONTEXT,
+      description,
     }
   );
 
   await prRemoveLabel(repoName, prNumber, CI_LABEL);
-  log.info('createBuild result:', newBuild);
 }
 
 /*
