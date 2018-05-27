@@ -8,11 +8,12 @@ node_modules/.bin/babel-node version-check.js
 for patch in $(cd patch/; find . -name \*.patch); do
   echo == Applying $patch
   (
-    set -x
     cd $(dirname $patch)
-    if [[ ! -f .$(basename $patch) ]]; then
-      patch --forward -p1 < $LOCAL_PATH/patch/$patch
-      touch .$(basename $patch)
+    if patch --dry-run --forward --silent -p1 < $LOCAL_PATH/patch/$patch; then
+      (
+        set -x
+        patch --forward -p1 < $LOCAL_PATH/patch/$patch
+      )
     fi
   )
 done
