@@ -439,7 +439,12 @@ function buildkiteHumanTimeInfo(buildData) {
   }
   case 'blocked':
   {
-    description = 'Blocked';
+    description = 'blocked';
+    break;
+  }
+  case 'waiting_failed':
+  {
+    description = 'aborted';
     break;
   }
   case 'running':
