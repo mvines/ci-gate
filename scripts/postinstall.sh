@@ -18,7 +18,7 @@ for patch in $(cd patch/; find . -name \*.patch); do
   )
 done
 
-if [[  -r public_html/terminal.css ]]; then
+if [[ ! -r public_html/terminal.css ]]; then
   wget -O public_html/terminal.css \
     https://raw.githubusercontent.com/buildkite/terminal/v3.1.0/assets/terminal.css
 fi
