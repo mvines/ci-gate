@@ -577,7 +577,7 @@ async function onBuildKitePublicLogRequest(req, res) {
       let jobLog = '<br><i>Build log not available</i>';
       if (job.name.includes('[public]')) {
         const html = await job.getLogHtmlAsync();
-        if (html.length > 0) {
+        if (html && html.length > 0) {
           jobLog = `<div class="term-container">${html}</div>`;
         }
 
