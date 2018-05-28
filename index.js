@@ -405,6 +405,18 @@ async function onGithub({id, name, payload}) {
   }
 }
 
+function buildkiteActiveState(state) {
+  switch (state) {
+  case 'canceled':
+  case 'failed':
+  case 'passed':
+  case 'waiting_failed':
+    return false;
+  default:
+    return true;
+  }
+}
+
 function buildkiteStateStyle(state) {
   const colorByState = {
     blocked: 'gray',
@@ -539,15 +551,8 @@ async function onBuildKitePublicLogRequest(req, res) {
   const jobs = build.jobs.filter((job) => job.name);
 
   let spinnerHtml = '';
-  switch (build.state) {
-  case 'canceled':
-  case 'failed':
-  case 'passed':
-  case 'waiting_failed':
-    break;
-  default:
+  if (buildkiteActiveState(build.state)) {
     spinnerHtml = `<img style='vertical-align:middle;' src='spinner.gif'>`;
-    break;
   }
 
   let header = `
@@ -580,27 +585,29 @@ async function onBuildKitePublicLogRequest(req, res) {
       `;
       body += '</ol>';
     }
+    let jobSpinnerRendered = false;
     for (let job of jobs) {
       const jobName = job.name.replace(/\[public\]/gi, '').trim();
       const jobNameUri = encodeURI(jobName);
       job.getLogHtmlAsync = promisify(job.getLogHtml);
       const jobHumanTime = buildkiteHumanTimeInfo(job.data);
 
-      let jobLog = '<br><i>Build log not available</i>';
+      let jobLog = '<br><i>Build log not available</i><br>';
       if (job.name.includes('[public]')) {
         const html = await job.getLogHtmlAsync();
-        if (html && html.length > 0) {
+        if (html) {
           jobLog = `<div class="term-container">${html}</div>`;
         }
+      }
 
-        if (job.data.state === 'running') {
-          jobLog += `
-            <img style='vertical-align:middle;' src='spinner.gif'>
-            <div style='color:orange; vertical-align:middle; display:inline;'>
-              <i>Job running, refresh page manually for updates...</i>
-            </div>
-          `;
-        }
+      if (!jobSpinnerRendered && buildkiteActiveState(job.data.state)) {
+        jobSpinnerRendered = true;
+        jobLog += `
+          <img style='vertical-align:middle;' src='spinner.gif'>
+          <div style='color:orange; vertical-align:middle; display:inline;'>
+            <i>Job active, refresh page manually for updates...</i>
+          </div>
+        `;
       }
 
       if (!brief) {
