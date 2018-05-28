@@ -538,6 +538,18 @@ async function onBuildKitePublicLogRequest(req, res) {
 
   const jobs = build.jobs.filter((job) => job.name);
 
+  let spinnerHtml = '';
+  switch (build.state) {
+  case 'canceled':
+  case 'failed':
+  case 'passed':
+  case 'waiting_failed':
+    break;
+  default:
+    spinnerHtml = `<img style='vertical-align:middle;' src='spinner.gif'>`;
+    break;
+  }
+
   let header = `
     <html>
     <head>
@@ -545,7 +557,7 @@ async function onBuildKitePublicLogRequest(req, res) {
       <link rel="stylesheet" type="text/css" href="/terminal.css" />
     </head>
     <body>
-    <h2>${build.message}</h2>
+    <h2>${spinnerHtml} ${build.message}</h2>
     <b>State:</b>
       <span style="${buildkiteStateStyle(build.state)}">
         ${build.state}
