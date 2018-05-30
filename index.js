@@ -148,10 +148,11 @@ async function handleCommitsPushedToPullRequest(repoName, prNumber) {
     return;
   }
 
-  await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL);
-  const body = ':scream: New commits were pushed while the automerge label was present.';
-  log.info(body);
-  await issue.createCommentAsync({body});
+  if (await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
+    const body = ':scream: New commits were pushed while the automerge label was present.';
+    log.info(body);
+    await issue.createCommentAsync({body});
+  }
 }
 
 async function autoMergePullRequest(repoName, prNumber) {
@@ -178,10 +179,11 @@ async function autoMergePullRequest(repoName, prNumber) {
   }
 
   if (mergeable === false) {
-    const body = ':broken_heart: Unable to automerge due to merge conflict';
-    log.info(body);
-    await issue.createCommentAsync({body});
-    await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL);
+    if (await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
+      const body = ':broken_heart: Unable to automerge due to merge conflict';
+      log.info(body);
+      await issue.createCommentAsync({body});
+    }
     return;
   }
 
@@ -210,10 +212,11 @@ async function autoMergePullRequest(repoName, prNumber) {
 
   case 'failure':
   {
-    const body = ':broken_heart: Unable to automerge due to CI failure';
-    log.info(body);
-    await issue.createCommentAsync({body});
-    await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL);
+    if (await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
+      const body = ':broken_heart: Unable to automerge due to CI failure';
+      log.info(body);
+      await issue.createCommentAsync({body});
+    }
     break;
   }
 
@@ -261,7 +264,9 @@ async function prRemoveLabel(repoName, prNumber, labelName) {
       `Error removing label ${labelName} from ${repoName}#${prNumber}`,
       err.message
     );
+    return false;
   }
+  return true;
 }
 
 function isBuildkitePublicLogUrl(url) {
