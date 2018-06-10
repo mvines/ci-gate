@@ -292,6 +292,33 @@ function isBuildkitePublicLogUrl(url) {
   return {pipeline, buildNumber};
 }
 
+function isBuildkitePublicArtifactUrl(url) {
+  if (typeof(url) !== 'string') {
+    return false;
+  }
+
+  const orgUrlPrefix = `https://api.buildkite.com/v2/organizations/${envconst.BUILDKITE_ORG_SLUG}/pipelines/`;
+  if (!url.startsWith(orgUrlPrefix)) {
+    return false;
+  }
+
+  const buildInfo = url.slice(orgUrlPrefix.length);
+  const reMatch = buildInfo.match(
+    /^([a-z-]+)\/builds\/([1-9[0-9]+)\/jobs\/([-a-z0-9]+)\/artifacts\/([-a-z0-9]+)\/download$/
+  );
+  if (!reMatch) {
+    return false;
+  }
+  assert(reMatch.index === 0);
+  assert(reMatch.length === 5);
+
+  const pipeline = reMatch[1];
+  const buildNumber = Number(reMatch[2]);
+  const jobId = reMatch[3];
+  const artifactId = reMatch[4];
+  return {pipeline, buildNumber, jobId, artifactId};
+}
+
 
 async function onGithubStatusUpdate(payload) {
   log.info('onGithubStatusUpdate', payload);
@@ -598,10 +625,23 @@ async function onBuildKitePublicLogRequest(req, res) {
       const jobHumanTime = buildkiteHumanTimeInfo(job.data);
 
       let jobLog = '<br><i>Build log not available</i><br>';
+      let artifacts;
       if (job.name.includes('[public]')) {
         const html = await job.getLogHtmlAsync();
         if (html) {
           jobLog = `<div class="term-container">${html}</div>`;
+        }
+
+        job.listArtifactsAsync = promisify(job.listArtifacts);
+        const jobArtifacts = await job.listArtifactsAsync();
+
+        if (jobArtifacts.length > 0) {
+          artifacts = jobArtifacts.map(a => {
+            const url = envconst.PUBLIC_URL_ROOT + '/buildkite_public_artifact?' +
+              `https://api.buildkite.com/v2/organizations/${envconst.BUILDKITE_ORG_SLUG}/pipelines/${buildInfo.pipeline}/builds/${buildInfo.buildNumber}/jobs/${a.jobId}/artifacts/${a.id}/download`;
+            return `<li><a href="${url}" target="_blank">${a.path}</a> (${a.size} bytes)</li>`;
+          }).join('');
+          artifacts = `<ul>${artifacts}</ul>`;
         }
       }
 
@@ -623,6 +663,14 @@ async function onBuildKitePublicLogRequest(req, res) {
             </span>
             - <a href="#${jobNameUri}">${jobName}</a>
             - <i>${jobHumanTime}</i>
+        `;
+        if (artifacts) {
+          header += `
+            <br>
+            ${artifacts}
+          `;
+        }
+        header += `
           </li>
         `;
         body += `
@@ -636,6 +684,12 @@ async function onBuildKitePublicLogRequest(req, res) {
           <b>Buildkite Log:</b> <a href="${job.data.web_url}"/>link</a></br>
         `;
       }
+      if (artifacts) {
+        body += `
+          <b>Artifacts:</b>
+          ${artifacts}
+        `;
+      }
       body += `
         <b>Command:</b> <code>${job.command}</code></br>
         ${jobLog}
@@ -645,6 +699,45 @@ async function onBuildKitePublicLogRequest(req, res) {
 
   log.info('Emitting log for', url);
   res.send(header + body + footer);
+}
+
+async function onBuildKitePublicArtifactRequest(req, res) {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const url = (queryIndex >= 0) ? req.originalUrl.slice(queryIndex + 1) : '';
+
+  const buildInfo = isBuildkitePublicArtifactUrl(url);
+  if (!buildInfo) {
+    log.warn(`Invalid public log url:`, url);
+    res.status(400).send('');
+    return;
+  }
+  if (!pipelineInPublicLogWhitelist(buildInfo.pipeline)) {
+    log.warn(`Pipeline is not in whitelist:`, buildInfo.pipeline);
+    res.status(400).send('');
+    return;
+  }
+
+  const pipeline = await buildkiteOrg.getPipelineAsync(buildInfo.pipeline);
+  pipeline.getBuildAsync = promisify(pipeline.getBuild);
+
+  const build = await pipeline.getBuildAsync(buildInfo.buildNumber);
+  build.getArtifactAsync = promisify(build.getArtifact);
+
+  const job = build.jobs.find(j => j.id === buildInfo.jobId);
+
+  job.listArtifactsAsync = promisify(job.listArtifacts);
+  const jobArtifacts = await job.listArtifactsAsync();
+
+  const artifact = jobArtifacts.find(a => a.id === buildInfo.artifactId);
+  artifact.getDownloadUrlAsync = promisify(artifact.getDownloadUrl);
+
+  const artifactUrl = await artifact.getDownloadUrlAsync();
+
+  log.info('Emitting artifact for', url);
+  res.writeHead(302, {
+    'Location': artifactUrl
+  });
+  res.end();
 }
 
 async function main() {
@@ -662,6 +755,7 @@ async function main() {
     app.use(webhooks.middleware);
     app.use(express.static(path.join(__dirname, 'public_html')));
     app.get('/buildkite_public_log', onBuildKitePublicLogRequest);
+    app.get('/buildkite_public_artifact', onBuildKitePublicArtifactRequest);
 
     app.listen(envconst.PORT, () => log.info(`Listening on ${envconst.PORT}`));
   } catch (err) {
