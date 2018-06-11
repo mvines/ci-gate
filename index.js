@@ -133,8 +133,12 @@ async function prHasLabel(repoName, prNumber, labelName) {
 
 async function userInCiWhitelist(repoName, user) {
   const repo = githubClient.repo(repoName);
-  if (await repo.collaboratorsAsync(user)) {
-    return true;
+  try {
+    if (await repo.collaboratorsAsync(user)) {
+      return true;
+    }
+  } catch (err) {
+    log.warn(`Error: userInCiWhitelist(${user}):`, err.message);
   }
   return envconst.CI_USER_WHITELIST.split(',').includes(user);
 }
@@ -382,7 +386,7 @@ async function onGithubPullRequest(payload) {
     await prRemoveLabel(repoName, prNumber, CI_LABEL);
 
     const user = payload.sender.login;
-    if (userInCiWhitelist(repoName, user)) {
+    if (await userInCiWhitelist(repoName, user)) {
       await triggerPullRequestCI(repoName, prNumber, headSha);
     } else {
       await repo.statusAsync(headSha, {
