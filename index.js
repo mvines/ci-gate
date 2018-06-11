@@ -284,7 +284,7 @@ function isBuildkitePublicLogUrl(url) {
   }
 
   const buildInfo = url.slice(orgUrlPrefix.length);
-  const reMatch = buildInfo.match(/^([a-z-]+)\/builds\/([1-9[0-9]+)$/);
+  const reMatch = buildInfo.match(/^([a-z-]+)\/builds\/([1-9[0-9]+|latest\/[a-z]+)$/);
   if (!reMatch) {
     return false;
   }
@@ -292,7 +292,7 @@ function isBuildkitePublicLogUrl(url) {
   assert(reMatch.length === 3);
 
   const pipeline = reMatch[1];
-  const buildNumber = Number(reMatch[2]);
+  const buildNumber = reMatch[2].startsWith('latest/') ? reMatch[2].substr(7) : Number(reMatch[2]);
   return {pipeline, buildNumber};
 }
 
@@ -543,6 +543,7 @@ async function onBuildKitePublicLogRequest(req, res) {
     res.status(400).send('');
     return;
   }
+
   if (!pipelineInPublicLogWhitelist(buildInfo.pipeline)) {
     log.warn(`Pipeline is not in whitelist:`, buildInfo.pipeline);
     res.status(400).send('');
@@ -554,8 +555,16 @@ async function onBuildKitePublicLogRequest(req, res) {
 
   const builds = await pipeline.listBuildsAsync();
   const build = builds.find(
-    (build) => build.number === buildInfo.buildNumber
+    (build) => {
+      if (typeof buildInfo.buildNumber === 'string') {
+        return build.branch === buildInfo.buildNumber;
+      } else {
+        return build.number === buildInfo.buildNumber;
+      }
+    }
   );
+  buildInfo.buildNumber = build.number; // replace buildNumber if it's a string (branch name)
+
   if (!build) {
     log.warn(`Build ${buildInfo.buildNumber} not found`);
     res.status(400).send('');
@@ -711,7 +720,7 @@ async function onBuildKitePublicArtifactRequest(req, res) {
 
   const buildInfo = isBuildkitePublicArtifactUrl(url);
   if (!buildInfo) {
-    log.warn(`Invalid public log url:`, url);
+    log.warn(`Invalid public artifact url:`, url);
     res.status(400).send('');
     return;
   }
