@@ -446,6 +446,7 @@ function buildkiteActiveState(state) {
   case 'canceled':
   case 'failed':
   case 'passed':
+  case 'timed_out':
   case 'waiting_failed':
     return false;
   default:
@@ -461,6 +462,7 @@ function buildkiteStateStyle(state) {
     passed: 'green',
     running: 'orange',
     scheduled: 'gray',
+    timed_out: 'red',
     waiting: 'gray',
     waiting_failed: 'red',
   };
@@ -488,6 +490,11 @@ function buildkiteHumanTimeInfo(buildData) {
   case 'blocked':
   {
     description = 'blocked';
+    break;
+  }
+  case 'timed_out':
+  {
+    description = 'timed out';
     break;
   }
   case 'waiting_failed':
