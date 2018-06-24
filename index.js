@@ -498,6 +498,7 @@ function buildkiteHumanTimeInfo(buildData) {
     break;
   }
   case 'waiting_failed':
+  case 'canceled':
   {
     description = 'aborted';
     break;
@@ -511,7 +512,6 @@ function buildkiteHumanTimeInfo(buildData) {
     description = 'running since ' + startedTime.format('HH:mm:ss on dddd');
     break;
   }
-  case 'canceled':
   case 'failed':
   case 'passed':
   {
