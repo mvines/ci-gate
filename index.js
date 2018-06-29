@@ -560,6 +560,7 @@ async function onBuildKitePublicLogRequest(req, res) {
   const pipeline = await buildkiteOrg.getPipelineAsync(buildInfo.pipeline);
   pipeline.listBuildsAsync = promisify(pipeline.listBuilds);
 
+  // TODO: Add pagination support for older builds
   const builds = await pipeline.listBuildsAsync();
   const build = builds.find(
     (build) => {
@@ -570,11 +571,14 @@ async function onBuildKitePublicLogRequest(req, res) {
       }
     }
   );
-  buildInfo.buildNumber = build.number; // replace buildNumber if it's a string (branch name)
 
   if (!build) {
-    log.warn(`Build ${buildInfo.buildNumber} not found`);
-    res.status(400).send('');
+    let msg = `Build ${buildInfo.buildNumber} not found, try <a href="${url}">here</a> instead.`;
+
+    // TODO: Add pagination support for older builds
+    msg += '<p>TODO: Add pagination support for older builds';
+    log.warn(msg);
+    res.status(400).send(msg);
     return;
   }
 
