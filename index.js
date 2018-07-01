@@ -671,7 +671,7 @@ async function onBuildKitePublicLogRequest(req, res) {
         if (jobArtifacts.length > 0) {
           artifacts = jobArtifacts.map(a => {
             const url = envconst.PUBLIC_URL_ROOT + '/buildkite_public_artifact?' +
-              `https://api.buildkite.com/v2/organizations/${envconst.BUILDKITE_ORG_SLUG}/pipelines/${buildInfo.pipeline}/builds/${buildInfo.buildNumber}/jobs/${a.jobId}/artifacts/${a.id}/download`;
+              `https://api.buildkite.com/v2/organizations/${envconst.BUILDKITE_ORG_SLUG}/pipelines/${buildInfo.pipeline}/builds/${build.number}/jobs/${a.jobId}/artifacts/${a.id}/download`;
             return `<li><a href="${url}" target="_blank">${a.path}</a> (${a.size} bytes)</li>`;
           }).join('');
           artifacts = `<ul>${artifacts}</ul>`;
