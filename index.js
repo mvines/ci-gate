@@ -88,6 +88,12 @@ async function triggerPullRequestCI(repoName, prNumber, commit) {
 
   log.info(`Triggering pull request: ${repoName}:${branch} at ${commit}`);
 
+  const pr = repo.pr(prNumber);
+  const prFiles = await pr.filesAsync();
+  const prFilenames = prFiles[0].map(f => f.filename);
+  const affected_files = prFilenames.join(':');
+  log.info(`files affected by this PR: ${affected_files}`);
+
   const pipelineName = path.basename(repoName);
 
   const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
@@ -100,6 +106,9 @@ async function triggerPullRequestCI(repoName, prNumber, commit) {
       branch,
       commit,
       message,
+      meta_data: {
+        affected_files,
+      },
     });
     description = 'Pull Request accepted for CI';
     log.info('createBuild result:', newBuild);

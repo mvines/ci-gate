@@ -35,6 +35,12 @@ fi
 This workaround is necessary to enable the buildkite API to successfully create
 a new pipeline from a pull request branch (`pull/123/head`).
 
+#### `affected_files` meta data for Pull Requests
+
+From within a job use `buildkite-agent meta-data get affected_files` to
+obtain a colon-delimited list of files that were added/removed/modified by this
+Pull Request.
+
 ### Heroku Config
 
 The following config variables should be set in Heroku.  See the code comments
