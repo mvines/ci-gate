@@ -12,6 +12,7 @@ const log = createLogger('index');
 
 const STATUS_CONTEXT = 'ci-gate';
 const CI_LABEL = 'CI';
+const NOCI_LABEL = 'noCI';
 const AUTOMERGE_LABEL = 'automerge';
 
 const envconst = {
@@ -84,6 +85,16 @@ let buildkiteOrg;
 async function triggerPullRequestCI(repoName, prNumber, commit) {
   const repo = githubClient.repo(repoName);
   const branch = `pull/${prNumber}/head`;
+
+  if (await prHasLabel(repoName, prNumber, NOCI_LABEL)) {
+    await repo.statusAsync(commit, {
+      'state': 'failure',
+      'context': STATUS_CONTEXT,
+      'description': `Remove ${NOCI_LABEL} label to continue`,
+    });
+    return;
+  }
+
   const message = `Pull Request #${prNumber} - ${commit.substring(0, 8)}`;
 
   log.info(`Triggering pull request: ${repoName}:${branch} at ${commit}`);
@@ -136,8 +147,8 @@ async function prSetLabel(repoName, prNumber, labelName) {
 async function prHasLabel(repoName, prNumber, labelName) {
   const issue = githubClient.issue(repoName, prNumber);
   const [labels] = await issue.labelsAsync();
-  const labelNames = labels.map((label) => label.name);
-  return labelNames.includes(labelName);
+  const labelNames = labels.map((label) => label.name.toLowerCase());
+  return labelNames.includes(labelName.toLowerCase());
 }
 
 async function userInCiWhitelist(repoName, user) {
@@ -332,7 +343,6 @@ function isBuildkitePublicArtifactUrl(url) {
   return {pipeline, buildNumber, jobId, artifactId};
 }
 
-
 async function onGithubStatusUpdate(payload) {
   log.info('onGithubStatusUpdate', payload);
 
@@ -376,9 +386,11 @@ async function onGithubPullRequestReview(payload) {
   await autoMergePullRequest(repoName, prNumber);
 }
 
+
 async function onGithubPullRequest(payload) {
   const prNumber = payload.number;
   const repoName = payload.repository.full_name;
+  const user = payload.sender.login;
   const {pull_request} = payload;
   const headSha = pull_request.head.sha;
   const merged = pull_request.merged;
@@ -394,7 +406,6 @@ async function onGithubPullRequest(payload) {
   {
     await prRemoveLabel(repoName, prNumber, CI_LABEL);
 
-    const user = payload.sender.login;
     if (await userInCiWhitelist(repoName, user)) {
       await triggerPullRequestCI(repoName, prNumber, headSha);
     } else {
@@ -406,9 +417,11 @@ async function onGithubPullRequest(payload) {
     }
     break;
   }
+  case 'unlabeled':
   case 'labeled':
     if (!merged) {
-      if (await prHasLabel(repoName, prNumber, CI_LABEL)) {
+      if (await userInCiWhitelist(repoName, user) ||
+          await prHasLabel(repoName, prNumber, CI_LABEL)) {
         await triggerPullRequestCI(repoName, prNumber, headSha);
       }
       await autoMergePullRequest(repoName, prNumber);
