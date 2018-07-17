@@ -343,6 +343,8 @@ function isBuildkitePublicArtifactUrl(url) {
   return {pipeline, buildNumber, jobId, artifactId};
 }
 
+let autoMergePullRequestsBusy = false;
+let autoMergePullRequestsPending = false;
 async function onGithubStatusUpdate(payload) {
   log.info('onGithubStatusUpdate', payload);
 
@@ -372,9 +374,23 @@ async function onGithubStatusUpdate(payload) {
     log.info(`Ignoring non-buildkite URL: ${target_url}`);
   }
 
-  // Check if any PRs in this repo should be merged, as unfortunately the status
-  // API provides no link from commit status to the corresponding pull request
-  await autoMergePullRequests(name);
+  autoMergePullRequestsPending = true;
+  if (autoMergePullRequestsBusy) {
+    log.info('autoMergePullRequests busy');
+    return;
+  }
+  autoMergePullRequestsBusy = true;
+  while (autoMergePullRequestsPending) {
+    autoMergePullRequestsPending = false;
+    try {
+      // Check if any PRs in this repo should be merged, as unfortunately the status
+      // API provides no link from commit status to the corresponding pull request
+      await autoMergePullRequests(name);
+    } catch (err) {
+      log.error('autoMergePullRequests failed with:', err);
+    }
+  }
+  autoMergePullRequestsBusy = false;
 }
 
 async function onGithubPullRequestReview(payload) {
