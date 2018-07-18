@@ -518,6 +518,7 @@ function buildkiteHumanTimeInfo(buildData) {
   switch (buildData.state) {
   case 'scheduled':
   case 'waiting':
+  case 'assigned':
   {
     assert(typeof buildData.scheduled_at === 'string');
     const scheduledTime = moment.utc(buildData.scheduled_at);
