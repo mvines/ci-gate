@@ -433,11 +433,9 @@ async function onGithubPullRequest(payload) {
     }
     break;
   }
-  case 'unlabeled':
   case 'labeled':
     if (!merged) {
-      if (await userInCiWhitelist(repoName, user) ||
-          await prHasLabel(repoName, prNumber, CI_LABEL)) {
+      if (await prHasLabel(repoName, prNumber, CI_LABEL)) {
         await triggerPullRequestCI(repoName, prNumber, headSha);
       }
       await autoMergePullRequest(repoName, prNumber);

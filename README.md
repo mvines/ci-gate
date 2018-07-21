@@ -4,7 +4,10 @@ Gates access to the CI system for Github pull requests.  Authorized users get
 immediate CI service.  Pull Requests from 3rd party users only enter CI once the
 `CI` label is added to their Pull Request by a member of the project.
 
-Suppress CI on a particular Pull Request by applying the 'noCI' label.
+Suppress CI on a particular Pull Request by applying the 'noCI' label.  To
+resume CI service on the Pull Request:
+1. Remove the 'noCI' label
+2. Add new commit, close/re-open, or add the 'CI' label
 
 ## Setup
 
