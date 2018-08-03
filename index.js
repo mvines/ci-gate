@@ -492,6 +492,7 @@ function buildkiteActiveState(state) {
 
 function buildkiteStateStyle(state) {
   const colorByState = {
+    assigned: 'gray',
     blocked: 'gray',
     canceled: 'red',
     failed: 'red',
