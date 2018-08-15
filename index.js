@@ -492,6 +492,7 @@ function buildkiteActiveState(state) {
 
 function buildkiteStateStyle(state) {
   const colorByState = {
+    accepted: 'gray',
     assigned: 'gray',
     blocked: 'gray',
     canceled: 'red',
@@ -518,6 +519,7 @@ function buildkiteHumanTimeInfo(buildData) {
   case 'scheduled':
   case 'waiting':
   case 'assigned':
+  case 'accepted':
   {
     assert(typeof buildData.scheduled_at === 'string');
     const scheduledTime = moment.utc(buildData.scheduled_at);
