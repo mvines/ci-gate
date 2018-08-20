@@ -1,0 +1,27 @@
+{
+  "name": "Buildkite CI Gate",
+  "description": "Gates access to Buildkite for Github pull requests.",
+  "keywords": ["buildkite"],
+  "repository": "https://github.com/mvines/ci-gate",
+  "env": {
+    "BUILDKITE_TOKEN": {
+      "description": "Generated in Buildkite, requires these scopes: read_builds, write_builds, read_build_logs, read_organizations, read_pipelines"
+    },
+    "BUILDKITE_ORG_SLUG": {
+      "description": "The buildkite organization slug name to use"
+    },
+    "BUILDKITE_PIPELINE_PUBLIC_LOG_WHITELIST": {
+      "description": "List of buildkite pipelines that may have their logs exposed to the public. Comma separated, no spaces",
+      "required": false
+    },
+    "GITHUB_TOKEN": {
+      "description": "Github OAuth token with access to the relevant github projects with the required scopes: repo:status, repo_deployment, public_repo"
+    },
+    "GITHUB_WEBHOOK_SECRET": {
+      "description": "Secret string added in the Github webhook configuration"
+    },
+    "PUBLIC_URL_ROOT": {
+      "description": "Public URL to this server"
+    }
+  }
+}

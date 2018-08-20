@@ -48,6 +48,14 @@ Pull Request.
 
 ### Heroku Config
 
+#### Heroku Template
+
+You can click the following button to use a template to deploy to Heroku:
+
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/mvines/ci-gate)
+
+#### Manual Setup
+
 The following config variables should be set in Heroku.  See the code comments
 in `index.js` for details on each:
 * `BUILDKITE_TOKEN`
