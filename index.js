@@ -479,6 +479,7 @@ async function onGithub({id, name, payload}) {
 
 function buildkiteActiveState(state) {
   switch (state) {
+  case 'canceling':
   case 'canceled':
   case 'failed':
   case 'passed':
@@ -495,6 +496,7 @@ function buildkiteStateStyle(state) {
     accepted: 'gray',
     assigned: 'gray',
     blocked: 'gray',
+    canceling: 'red',
     canceled: 'red',
     failed: 'red',
     passed: 'green',
@@ -538,6 +540,7 @@ function buildkiteHumanTimeInfo(buildData) {
     break;
   }
   case 'waiting_failed':
+  case 'canceling':
   case 'canceled':
   {
     description = 'aborted';
