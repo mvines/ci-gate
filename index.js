@@ -37,6 +37,11 @@ const envconst = {
   BUILDKITE_PIPELINE_PUBLIC_LOG_WHITELIST: '', // comma separated, no spaces
 
   /*
+     Exposes all logs of whitelisted pipelines if set to true
+   */
+  BUILDKITE_EXPOSE_ALL_JOB_LOGS: null,
+
+  /*
      Github OAuth token with access to the relevant github projects with the
      required scopes:
      * repo:status
@@ -693,7 +698,7 @@ async function onBuildKitePublicLogRequest(req, res) {
 
       let jobLog = '<br><i>Build log not available</i><br>';
       let artifacts;
-      if (job.name.includes('[public]')) {
+      if (envconst.BUILDKITE_EXPOSE_ALL_JOB_LOGS || job.name.includes('[public]')) {
         const html = await job.getLogHtmlAsync();
         if (html) {
           jobLog = `<div class="term-container">${html}</div>`;
