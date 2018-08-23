@@ -39,7 +39,7 @@ const envconst = {
   /*
      Exposes all logs of whitelisted pipelines if set to true
    */
-  BUILDKITE_EXPOSE_ALL_JOB_LOGS: null,
+  BUILDKITE_EXPOSE_ALL_JOB_LOGS: false,
 
   /*
      Github OAuth token with access to the relevant github projects with the
