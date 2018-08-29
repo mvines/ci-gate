@@ -87,7 +87,13 @@ buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization
 let buildkiteOrg;
 
 
-async function triggerPullRequestCI(repoName, prNumber, commit) {
+async function triggerPullRequestCI({
+  repoName,
+  prNumber,
+  headSha: commit,
+  pullRequestId: pull_request_id,
+  pullRequestBaseBranch: pull_request_base_branch
+}) {
   const repo = githubClient.repo(repoName);
   const branch = `pull/${prNumber}/head`;
 
@@ -118,6 +124,12 @@ async function triggerPullRequestCI(repoName, prNumber, commit) {
   if (pipeline) {
     pipeline.createBuildAsync = promisify(pipeline.createBuild);
 
+    console.log('DEBUG: KEVIN get details.', {
+      pull_request_id,
+      pull_request_base_branch,
+      pull_request_repository: repoName
+    });
+
     const newBuild = await pipeline.createBuildAsync({
       branch,
       commit,
@@ -125,6 +137,9 @@ async function triggerPullRequestCI(repoName, prNumber, commit) {
       meta_data: {
         affected_files,
       },
+      pull_request_id,
+      pull_request_base_branch,
+      pull_request_repository: repoName
     });
     description = 'Pull Request accepted for CI';
     log.info('createBuild result:', newBuild);
@@ -418,6 +433,7 @@ async function onGithubPullRequest(payload) {
   const repo = githubClient.repo(repoName);
 
   log.info(payload.action, headSha, prNumber, repoName);
+
   switch (payload.action) {
   case 'synchronize':
     handleCommitsPushedToPullRequest(repoName, prNumber);
@@ -428,7 +444,13 @@ async function onGithubPullRequest(payload) {
     await prRemoveLabel(repoName, prNumber, CI_LABEL);
 
     if (await userInCiWhitelist(repoName, user)) {
-      await triggerPullRequestCI(repoName, prNumber, headSha);
+      await triggerPullRequestCI({
+        repoName,
+        prNumber,
+        headSha,
+        pullRequestId: pull_request.id,
+        pullRequestBaseBranch: pull_request.head.ref
+      });
     } else {
       await repo.statusAsync(headSha, {
         'state': 'pending',
@@ -441,7 +463,13 @@ async function onGithubPullRequest(payload) {
   case 'labeled':
     if (!merged) {
       if (await prHasLabel(repoName, prNumber, CI_LABEL)) {
-        await triggerPullRequestCI(repoName, prNumber, headSha);
+        await triggerPullRequestCI({
+          repoName,
+          prNumber,
+          headSha,
+          pullRequestId: pull_request.id,
+          pullRequestBaseBranch: pull_request.head.ref
+        });
       }
       await autoMergePullRequest(repoName, prNumber);
     }
