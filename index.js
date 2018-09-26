@@ -452,16 +452,19 @@ async function onGithubPullRequest(payload) {
 }
 
 async function onGithubPush(payload) {
-  const { ref, commits } = payload;
+  const { ref, commits, repository } = payload;
   log.info(payload);
   // building only the master branch
   if (ref !== 'refs/heads/master') {
     return await Promise.resolve();
   }
 
+  const pipeline = await buildkiteOrg.getPipelineAsync(repository.name);
+  const createBuildAsync = promisify(pipeline.createBuild)
+
   const message = commits[0] ? commits[0].message : 'Build triggered from CI gate';
 
-  await pipeline.createBuildAsync({
+  await createBuildAsync({
     branch: 'master',
     commit: ref,
     message
