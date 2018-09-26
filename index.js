@@ -460,7 +460,7 @@ async function onGithubPush(payload) {
   }
 
   const pipeline = await buildkiteOrg.getPipelineAsync(repository.name);
-  const createBuildAsync = promisify(pipeline.createBuild)
+  const createBuildAsync = promisify(pipeline.createBuild).bind(pipeline);
 
   const message = commits[0] ? commits[0].message : 'Build triggered from CI gate';
 
