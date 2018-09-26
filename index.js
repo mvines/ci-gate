@@ -452,8 +452,20 @@ async function onGithubPullRequest(payload) {
 }
 
 async function onGithubPush(payload) {
+  const { ref, commits } = payload;
   log.info(payload);
-  await Promise.resolve(); // pacify eslint
+  // building only the master branch
+  if (ref !== 'refs/heads/master') {
+    return await Promise.resolve();
+  }
+
+  const message = commits[0] ? commits[0].message : 'Build triggered from CI gate';
+
+  await pipeline.createBuildAsync({
+    branch: 'master',
+    commit: ref,
+    message
+  });
 }
 
 async function onGithubPing(payload) {
