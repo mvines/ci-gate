@@ -75,7 +75,7 @@ const envconst = {
      Labels that are specific to instance of CI gate.
      These labels are passed on to buildkite.
    */
-  CUSTOM_LABELS: 'testnet,', // comma separated, no spaces
+  CUSTOM_PR_LABEL_BUILDS: '', // comma separated, no spaces
 };
 
 for (const v in envconst) {
@@ -92,22 +92,19 @@ const buildkiteClient = createBuildKiteClient({
 buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization);
 let buildkiteOrg;
 
-async function triggerLabelOnPipeline(repoName, prNumber, commit, label) {
+async function triggerPipeline(pipelineName, repoName, prNumber, commit, label) {
   const repo = githubClient.repo(repoName);
   const branch = `pull/${prNumber}/head`;
 
   const message = `Pull Request #${prNumber} - ${commit.substring(0, 8)}`;
 
-  log.info(`Triggering ${label} request: ${repoName}:${branch} at ${commit}`);
+  log.info(`Triggering pull request: ${repoName}:${branch} at ${commit}`);
 
   const pr = repo.pr(prNumber);
   const prFiles = await pr.filesAsync();
   const prFilenames = prFiles[0].map(f => f.filename);
   const affected_files = prFilenames.join(':');
   log.info(`files affected by this PR: ${affected_files}`);
-
-  const pipelineName = path.basename(repoName) + '-' + label;
-  log.info(`Pipeline: ${pipelineName}`);
 
   const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
 
@@ -123,7 +120,7 @@ async function triggerLabelOnPipeline(repoName, prNumber, commit, label) {
         affected_files,
       },
     });
-    description = 'Pull Request accepted for testnet automation';
+    description = `Pull Request accepted for ${label} pipeline`;
     log.info('createBuild result:', newBuild);
   } else {
     log.info(description);
@@ -141,59 +138,27 @@ async function triggerLabelOnPipeline(repoName, prNumber, commit, label) {
   await prRemoveLabel(repoName, prNumber, label);
 }
 
-async function triggerPullRequestCI(repoName, prNumber, commit) {
-  const repo = githubClient.repo(repoName);
-  const branch = `pull/${prNumber}/head`;
+async function triggerLabelsOnPipeline(repoName, prNumber, commit) {
+  const customLabels = envconst.CUSTOM_PR_LABEL_BUILDS.split(',');
 
+  for (let index = 0; index < customLabels.length; ++index) {
+    let label = customLabels[index];
+    if (await prHasLabel(repoName, prNumber, label)) {
+      triggerPipeline(path.basename(repoName) + '-' + label, repoName, prNumber, commit, label);
+    }
+  }
+}
+
+async function hasNoCILabel(repoName, prNumber) {
   if (await prHasLabel(repoName, prNumber, NOCI_LABEL)) {
     await repo.statusAsync(commit, {
       'state': 'failure',
       'context': STATUS_CONTEXT,
       'description': `Remove ${NOCI_LABEL} label to continue`,
     });
-    return;
+    return true;
   }
-
-  const message = `Pull Request #${prNumber} - ${commit.substring(0, 8)}`;
-
-  log.info(`Triggering pull request: ${repoName}:${branch} at ${commit}`);
-
-  const pr = repo.pr(prNumber);
-  const prFiles = await pr.filesAsync();
-  const prFilenames = prFiles[0].map(f => f.filename);
-  const affected_files = prFilenames.join(':');
-  log.info(`files affected by this PR: ${affected_files}`);
-
-  const pipelineName = path.basename(repoName);
-
-  const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
-
-  let description = `${pipelineName} CI pipeline not present`;
-  if (pipeline) {
-    pipeline.createBuildAsync = promisify(pipeline.createBuild);
-
-    const newBuild = await pipeline.createBuildAsync({
-      branch,
-      commit,
-      message,
-      meta_data: {
-        affected_files,
-      },
-    });
-    description = 'Pull Request accepted for CI';
-    log.info('createBuild result:', newBuild);
-  }
-
-  await repo.statusAsync(
-    commit,
-    {
-      state: 'success',
-      context: STATUS_CONTEXT,
-      description,
-    }
-  );
-
-  await prRemoveLabel(repoName, prNumber, CI_LABEL);
+  return false;
 }
 
 /*
@@ -461,7 +426,6 @@ async function onGithubPullRequestReview(payload) {
   await autoMergePullRequest(repoName, prNumber);
 }
 
-
 async function onGithubPullRequest(payload) {
   const prNumber = payload.number;
   const repoName = payload.repository.full_name;
@@ -470,7 +434,6 @@ async function onGithubPullRequest(payload) {
   const headSha = pull_request.head.sha;
   const merged = pull_request.merged;
   const repo = githubClient.repo(repoName);
-  const customLabels = envconst.CUSTOM_LABELS.split(',');
 
   log.info(payload.action, headSha, prNumber, repoName);
   switch (payload.action) {
@@ -483,13 +446,10 @@ async function onGithubPullRequest(payload) {
     await prRemoveLabel(repoName, prNumber, CI_LABEL);
 
     if (await userInCiWhitelist(repoName, user)) {
-      await triggerPullRequestCI(repoName, prNumber, headSha);
-      for (let index = 0; index < customLabels.length; ++index) {
-        if (await prHasLabel(repoName, prNumber, customLabels[index])) {
-          await prRemoveLabel(repoName, prNumber, customLabels[index]);
-          await triggerLabelOnPipeline(repoName, prNumber, headSha, customLabels[index]);
-        }
+      if (!await hasNoCILabel(repoName, prNumber)) {
+        await triggerPipeline(path.basename(repoName), repoName, prNumber, headSha, CI_LABEL);
       }
+      await triggerLabelsOnPipeline(repoName, prNumber, headSha);
     } else {
       await repo.statusAsync(headSha, {
         'state': 'pending',
@@ -502,16 +462,13 @@ async function onGithubPullRequest(payload) {
   case 'labeled':
     if (!merged) {
       if (await prHasLabel(repoName, prNumber, CI_LABEL)) {
-        await triggerPullRequestCI(repoName, prNumber, headSha);
+        if (!await hasNoCILabel(repoName, prNumber)) {
+          await triggerPipeline(path.basename(repoName), repoName, prNumber, headSha, CI_LABEL);
+        }
       }
       await autoMergePullRequest(repoName, prNumber);
     }
-    for (let index = 0; index < customLabels.length; ++index) {
-      if (await prHasLabel(repoName, prNumber, customLabels[index])) {
-        await prRemoveLabel(repoName, prNumber, customLabels[index]);
-        await triggerLabelOnPipeline(repoName, prNumber, headSha, customLabels[index]);
-      }
-    }
+    await triggerLabelsOnPipeline(repoName, prNumber, headSha);
     break;
   default:
     log.info('Ignored pull request action:', payload.action);
