@@ -144,7 +144,8 @@ async function triggerLabelsOnPipeline(repoName, prNumber, commit) {
   for (let index = 0; index < customLabels.length; ++index) {
     let label = customLabels[index];
     if (await prHasLabel(repoName, prNumber, label)) {
-      triggerPipeline(path.basename(repoName) + '-' + label, repoName, prNumber, commit, label);
+      await triggerPipeline(path.basename(repoName) + '-' + label, repoName,
+                            prNumber, commit, label);
     }
   }
 }
