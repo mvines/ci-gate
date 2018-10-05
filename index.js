@@ -70,6 +70,12 @@ const envconst = {
      automatically granted CI access
    */
   CI_USER_WHITELIST: '', // comma separated, no spaces
+
+  /*
+     Labels that are specific to instance of CI gate.
+     These labels are passed on to buildkite.
+   */
+  CUSTOM_LABELS: 'testnet,', // comma separated, no spaces
 };
 
 for (const v in envconst) {
@@ -86,6 +92,54 @@ const buildkiteClient = createBuildKiteClient({
 buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization);
 let buildkiteOrg;
 
+async function triggerLabelOnPipeline(repoName, prNumber, commit, label) {
+  const repo = githubClient.repo(repoName);
+  const branch = `pull/${prNumber}/head`;
+
+  const message = `Pull Request #${prNumber} - ${commit.substring(0, 8)}`;
+
+  log.info(`Triggering ${label} request: ${repoName}:${branch} at ${commit}`);
+
+  const pr = repo.pr(prNumber);
+  const prFiles = await pr.filesAsync();
+  const prFilenames = prFiles[0].map(f => f.filename);
+  const affected_files = prFilenames.join(':');
+  log.info(`files affected by this PR: ${affected_files}`);
+
+  const pipelineName = path.basename(repoName) + '-' + label;
+  log.info(`Pipeline: ${pipelineName}`);
+
+  const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
+
+  let description = `${pipelineName} pipeline not present`;
+  if (pipeline) {
+    pipeline.createBuildAsync = promisify(pipeline.createBuild);
+
+    const newBuild = await pipeline.createBuildAsync({
+      branch,
+      commit,
+      message,
+      meta_data: {
+        affected_files,
+      },
+    });
+    description = 'Pull Request accepted for testnet automation';
+    log.info('createBuild result:', newBuild);
+  } else {
+    log.info(description);
+  }
+
+  await repo.statusAsync(
+    commit,
+    {
+      state: 'success',
+      context: STATUS_CONTEXT,
+      description,
+    }
+  );
+
+  await prRemoveLabel(repoName, prNumber, label);
+}
 
 async function triggerPullRequestCI(repoName, prNumber, commit) {
   const repo = githubClient.repo(repoName);
@@ -416,6 +470,7 @@ async function onGithubPullRequest(payload) {
   const headSha = pull_request.head.sha;
   const merged = pull_request.merged;
   const repo = githubClient.repo(repoName);
+  const customLabels = envconst.CUSTOM_LABELS.split(',');
 
   log.info(payload.action, headSha, prNumber, repoName);
   switch (payload.action) {
@@ -429,6 +484,12 @@ async function onGithubPullRequest(payload) {
 
     if (await userInCiWhitelist(repoName, user)) {
       await triggerPullRequestCI(repoName, prNumber, headSha);
+      for (var index = 0; index < customLabels.length; ++index) {
+        if (await prHasLabel(repoName, prNumber, customLabels[index])) {
+          await prRemoveLabel(repoName, prNumber, customLabels[index]);
+          await triggerLabelOnPipeline(repoName, prNumber, headSha, customLabels[index]);
+        }
+      }
     } else {
       await repo.statusAsync(headSha, {
         'state': 'pending',
@@ -444,6 +505,12 @@ async function onGithubPullRequest(payload) {
         await triggerPullRequestCI(repoName, prNumber, headSha);
       }
       await autoMergePullRequest(repoName, prNumber);
+    }
+    for (var index = 0; index < customLabels.length; ++index) {
+      if (await prHasLabel(repoName, prNumber, customLabels[index])) {
+        await prRemoveLabel(repoName, prNumber, customLabels[index]);
+        await triggerLabelOnPipeline(repoName, prNumber, headSha, customLabels[index]);
+      }
     }
     break;
   default:
