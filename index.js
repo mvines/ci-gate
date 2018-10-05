@@ -484,7 +484,7 @@ async function onGithubPullRequest(payload) {
 
     if (await userInCiWhitelist(repoName, user)) {
       await triggerPullRequestCI(repoName, prNumber, headSha);
-      for (var index = 0; index < customLabels.length; ++index) {
+      for (let index = 0; index < customLabels.length; ++index) {
         if (await prHasLabel(repoName, prNumber, customLabels[index])) {
           await prRemoveLabel(repoName, prNumber, customLabels[index]);
           await triggerLabelOnPipeline(repoName, prNumber, headSha, customLabels[index]);
@@ -506,7 +506,7 @@ async function onGithubPullRequest(payload) {
       }
       await autoMergePullRequest(repoName, prNumber);
     }
-    for (var index = 0; index < customLabels.length; ++index) {
+    for (let index = 0; index < customLabels.length; ++index) {
       if (await prHasLabel(repoName, prNumber, customLabels[index])) {
         await prRemoveLabel(repoName, prNumber, customLabels[index]);
         await triggerLabelOnPipeline(repoName, prNumber, headSha, customLabels[index]);
