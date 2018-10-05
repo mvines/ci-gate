@@ -145,12 +145,13 @@ async function triggerLabelsOnPipeline(repoName, prNumber, commit) {
     let label = customLabels[index];
     if (await prHasLabel(repoName, prNumber, label)) {
       await triggerPipeline(path.basename(repoName) + '-' + label, repoName,
-                            prNumber, commit, label);
+        prNumber, commit, label);
     }
   }
 }
 
-async function hasNoCILabel(repoName, prNumber) {
+async function hasNoCILabel(repoName, prNumber, commit) {
+  const repo = githubClient.repo(repoName);
   if (await prHasLabel(repoName, prNumber, NOCI_LABEL)) {
     await repo.statusAsync(commit, {
       'state': 'failure',
@@ -447,7 +448,7 @@ async function onGithubPullRequest(payload) {
     await prRemoveLabel(repoName, prNumber, CI_LABEL);
 
     if (await userInCiWhitelist(repoName, user)) {
-      if (!await hasNoCILabel(repoName, prNumber)) {
+      if (!await hasNoCILabel(repoName, prNumber, headSha)) {
         await triggerPipeline(path.basename(repoName), repoName, prNumber, headSha, CI_LABEL);
       }
       await triggerLabelsOnPipeline(repoName, prNumber, headSha);
@@ -463,7 +464,7 @@ async function onGithubPullRequest(payload) {
   case 'labeled':
     if (!merged) {
       if (await prHasLabel(repoName, prNumber, CI_LABEL)) {
-        if (!await hasNoCILabel(repoName, prNumber)) {
+        if (!await hasNoCILabel(repoName, prNumber, headSha)) {
           await triggerPipeline(path.basename(repoName), repoName, prNumber, headSha, CI_LABEL);
         }
       }
