@@ -110,7 +110,7 @@ async function triggerPullRequestCI(repoName, prNumber, commit) {
   const affected_files = prFilenames.join(':');
   log.info(`files affected by this PR: ${affected_files}`);
 
-  const pipelineName = path.basename(repoName);
+  const pipelineName = path.basename(repoName).replace(/\./g, '-');
 
   const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
 
