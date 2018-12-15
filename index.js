@@ -385,19 +385,23 @@ async function onGithubStatusUpdate(payload) {
     target_url,
   } = payload;
 
-  if (isBuildkitePublicLogUrl(target_url)) {
-    // Overwrite the buildkite status url with the public log equivalent
-    const new_target_url = envconst.PUBLIC_URL_ROOT + '/buildkite_public_log?' + target_url;
-    log.info('updating to', new_target_url);
-    const repo = githubClient.repo(name);
-    await repo.statusAsync(sha, {
-      state,
-      context,
-      description,
-      target_url: new_target_url,
-    });
-  } else {
+  const buildInfo = isBuildkitePublicLogUrl(target_url);
+  if (!buildInfo) {
     log.info(`Ignoring non-buildkite URL: ${target_url}`);
+  } else {
+    // Overwrite the buildkite status url with the public log equivalent if this
+    // pipeline is in the whitelist
+    if (pipelineInPublicLogWhitelist(buildInfo.pipeline)) {
+      const new_target_url = envconst.PUBLIC_URL_ROOT + '/buildkite_public_log?' + target_url;
+      log.info('updating to', new_target_url);
+      const repo = githubClient.repo(name);
+      await repo.statusAsync(sha, {
+        state,
+        context,
+        description,
+        target_url: new_target_url,
+      });
+    }
   }
 
   autoMergePullRequestsPending = true;
