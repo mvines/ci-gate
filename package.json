@@ -28,7 +28,7 @@
     "es6-promisify": "^6.0.1",
     "express": "^4.16.4",
     "fs-extra": "^7.0.1",
-    "moment": "^2.22.2",
+    "moment": "^2.24.0",
     "octonode": "^0.9.5",
     "request-promise": "^4.2.2",
     "silk-log": "^1.14.5"
