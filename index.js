@@ -691,6 +691,7 @@ async function onBuildKitePublicLogRequest(req, res) {
   }
 
   let header = `
+    <!DOCTYPE html>
     <html>
     <head>
       <title>${build.message}</title>
