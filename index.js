@@ -76,6 +76,11 @@ const envconst = {
      These labels are passed on to buildkite.
    */
   CUSTOM_PR_LABEL_BUILDS: '', // comma separated, no spaces
+
+  /*
+     Merge method to use for Github PRs: merge, squash or rebase
+   */
+  GITHUB_MERGE_METHOD: 'rebase',
 };
 
 for (const v in envconst) {
@@ -253,7 +258,7 @@ async function autoMergePullRequest(repoName, prNumber) {
       const mergeResult = await pr.mergeAsync({
         sha: head.sha,
         commit_message: 'automerge',
-        merge_method: 'rebase',
+        merge_method: envconst.GITHUB_MERGE_METHOD,
       });
       log.info(`successfully merged`, mergeResult);
     }
