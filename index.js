@@ -70,6 +70,12 @@ const envconst = {
      automatically granted CI access
    */
   CI_USER_WHITELIST: '', // comma separated, no spaces
+
+  /*
+     List of github repos (full_name format; e.g. `org/repo`) that use
+     public Buildkite pipelines
+  */
+  PUBLIC_PIPELINE_REPOS: '', // comma separated, no spaces
 };
 
 for (const v in envconst) {
@@ -79,6 +85,7 @@ for (const v in envconst) {
   }
 }
 
+const PUBLIC_PIPELINE_REPOS = new Set(envconst.PUBLIC_PIPELINE_REPOS.split(','));
 const githubClient = github.client(envconst.GITHUB_TOKEN);
 const buildkiteClient = createBuildKiteClient({
   accessToken: envconst.BUILDKITE_TOKEN
@@ -359,12 +366,13 @@ async function onGithubStatusUpdate(payload) {
     context,
     description,
     name,
+    repository,
     sha,
     state,
     target_url,
   } = payload;
 
-  if (isBuildkitePublicLogUrl(target_url)) {
+  if (!PUBLIC_PIPELINE_REPOS.has(repository.full_name) && isBuildkitePublicLogUrl(target_url)) {
     // Overwrite the buildkite status url with the public log equivalent
     const new_target_url = envconst.PUBLIC_URL_ROOT + '/buildkite_public_log?' + target_url;
     log.info('updating to', new_target_url);
