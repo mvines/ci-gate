@@ -186,12 +186,29 @@ async function prHasLabel(repoName, prNumber, labelName) {
   return labelNames.includes(labelName.toLowerCase());
 }
 
-async function userInCiWhitelist(repoName, user) {
+async function userInCiWhitelist(repoName, prNumber, user) {
   const repo = githubClient.repo(repoName);
   try {
     if (await repo.collaboratorsAsync(user)) {
       return true;
     }
+
+    // If this PR has previously been accepted by somebody adding the CI_LABEL,
+    // then accept future updates to the PR.  This avoids the need to
+    // continually readd the `CI_LABEL` at the expense of trusting the PR author
+    // more.
+    const statusesResponse = await repo.statusesAsync(`pull/${prNumber}/head`);
+    const statuses = statusesResponse[0];
+
+    const ciGateStatus = statuses.find(s => {
+      return s.context === STATUS_CONTEXT;
+    });
+
+    if (ciGateStatus && ciGateStatus === 'success') {
+      return true;
+    }
+
+    //statuses = await repo.statusesAsync(headSha
   } catch (err) {
     log.warn(`Error: userInCiWhitelist(${user}):`, err.message);
   }
@@ -461,7 +478,7 @@ async function onGithubPullRequest(payload) {
   {
     await prRemoveLabel(repoName, prNumber, CI_LABEL);
 
-    if (await userInCiWhitelist(repoName, user)) {
+    if (await userInCiWhitelist(repoName, prNumber, user)) {
       if (!await hasNoCILabel(repoName, prNumber, headSha)) {
         await triggerPipeline(path.basename(repoName), repoName, baseBranch, prNumber, headSha, CI_LABEL, user);
       }
