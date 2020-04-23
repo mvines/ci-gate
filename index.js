@@ -97,11 +97,11 @@ const buildkiteClient = createBuildKiteClient({
 buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization);
 let buildkiteOrg;
 
-async function triggerPipeline(pipelineName, repoName, baseBranch, prNumber, commit, label, user) {
+async function triggerPipeline(pipelineName, repoName, baseBranch, prNumber, commit, label, title, user) {
   const repo = githubClient.repo(repoName);
   const branch = `pull/${prNumber}/head`;
 
-  const message = `Pull Request #${prNumber} - ${commit.substring(0, 8)}`;
+  const message = `PR#${prNumber} - ${commit.substring(0, 8)} - ${title} - ${user}`;
 
   log.info(`Triggering pull request: ${repoName}:${branch} at ${commit}`);
 
@@ -147,14 +147,14 @@ async function triggerPipeline(pipelineName, repoName, baseBranch, prNumber, com
   await prRemoveLabel(repoName, prNumber, label);
 }
 
-async function triggerLabelsOnPipeline(repoName, baseBranch, prNumber, commit, user) {
+async function triggerLabelsOnPipeline(repoName, baseBranch, prNumber, commit, title, user) {
   const customLabels = envconst.CUSTOM_PR_LABEL_BUILDS.split(',');
 
   for (let index = 0; index < customLabels.length; ++index) {
     let label = customLabels[index];
     if (await prHasLabel(repoName, prNumber, label)) {
       await triggerPipeline(path.basename(repoName) + '-' + label, repoName,
-        baseBranch, prNumber, commit, label, user);
+        baseBranch, prNumber, commit, label, title, user);
     }
   }
 }
@@ -463,6 +463,7 @@ async function onGithubPullRequest(payload) {
   const repoName = payload.repository.full_name;
   const user = payload.sender.login;
   const {pull_request} = payload;
+  const title = pull_request.title;
   const headSha = pull_request.head.sha;
   const baseBranch = pull_request.base.ref;
   const merged = pull_request.merged;
@@ -480,9 +481,9 @@ async function onGithubPullRequest(payload) {
 
     if (await userInCiWhitelist(repoName, prNumber, user)) {
       if (!await hasNoCILabel(repoName, prNumber, headSha)) {
-        await triggerPipeline(path.basename(repoName), repoName, baseBranch, prNumber, headSha, CI_LABEL, user);
+        await triggerPipeline(path.basename(repoName), repoName, baseBranch, prNumber, headSha, CI_LABEL, title, user);
       }
-      await triggerLabelsOnPipeline(repoName, baseBranch, prNumber, headSha, user);
+      await triggerLabelsOnPipeline(repoName, baseBranch, prNumber, headSha, title, user);
     } else {
       await repo.statusAsync(headSha, {
         'state': 'pending',
@@ -496,12 +497,12 @@ async function onGithubPullRequest(payload) {
     if (!merged) {
       if (await prHasLabel(repoName, prNumber, CI_LABEL)) {
         if (!await hasNoCILabel(repoName, prNumber, headSha)) {
-          await triggerPipeline(path.basename(repoName), repoName, baseBranch, prNumber, headSha, CI_LABEL, user);
+          await triggerPipeline(path.basename(repoName), repoName, baseBranch, prNumber, headSha, CI_LABEL, title, user);
         }
       }
       await autoMergePullRequest(repoName, prNumber);
     }
-    await triggerLabelsOnPipeline(repoName, prNumber, headSha, user);
+    await triggerLabelsOnPipeline(repoName, prNumber, headSha, title, user);
     break;
   default:
     log.info('Ignored pull request action:', payload.action);
