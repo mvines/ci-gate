@@ -13,7 +13,6 @@ const log = createLogger('index');
 const STATUS_CONTEXT = 'ci-gate';
 const CI_LABEL = 'CI';
 const NOCI_LABEL = 'noCI';
-const AUTOMERGE_LABEL = 'automerge';
 
 const envconst = {
   /*
@@ -81,6 +80,8 @@ const envconst = {
      Merge method to use for Github PRs: merge, squash or rebase
    */
   GITHUB_MERGE_METHOD: 'rebase',
+
+  AUTOMERGE_LABEL: 'automerge',
 };
 
 for (const v in envconst) {
@@ -219,12 +220,12 @@ async function handleCommitsPushedToPullRequest(repoName, prNumber) {
   const repo = githubClient.repo(repoName);
   const issue = repo.issue(prNumber);
 
-  if (!await prHasLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
-    log.debug(`handleCommitsPushedToPullRequest: ${AUTOMERGE_LABEL} label is not set`);
+  if (!await prHasLabel(repoName, prNumber, envconst.AUTOMERGE_LABEL)) {
+    log.debug(`handleCommitsPushedToPullRequest: ${envconst.AUTOMERGE_LABEL} label is not set`);
     return;
   }
 
-  if (await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
+  if (await prRemoveLabel(repoName, prNumber, envconst.AUTOMERGE_LABEL)) {
     const body = ':scream: New commits were pushed while the automerge label was present.';
     log.info(body);
     await issue.createCommentAsync({body});
@@ -243,8 +244,8 @@ async function autoMergePullRequest(repoName, prNumber) {
     return;
   }
 
-  if (!await prHasLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
-    log.debug(`autoMergePullRequest: ${AUTOMERGE_LABEL} label is not set`);
+  if (!await prHasLabel(repoName, prNumber, envconst.AUTOMERGE_LABEL)) {
+    log.debug(`autoMergePullRequest: ${envconst.AUTOMERGE_LABEL} label is not set`);
     return;
   }
 
@@ -255,7 +256,7 @@ async function autoMergePullRequest(repoName, prNumber) {
   }
 
   if (mergeable === false) {
-    if (await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
+    if (await prRemoveLabel(repoName, prNumber, envconst.AUTOMERGE_LABEL)) {
       const body = ':broken_heart: Unable to automerge due to merge conflict';
       log.info(body);
       await issue.createCommentAsync({body});
@@ -288,7 +289,7 @@ async function autoMergePullRequest(repoName, prNumber) {
 
   case 'failure':
   {
-    if (await prRemoveLabel(repoName, prNumber, AUTOMERGE_LABEL)) {
+    if (await prRemoveLabel(repoName, prNumber, envconst.AUTOMERGE_LABEL)) {
       const body = ':broken_heart: Unable to automerge due to CI failure';
       log.info(body);
       await issue.createCommentAsync({body});
