@@ -3,8 +3,6 @@
 cd $(dirname $0)/..
 LOCAL_PATH=$PWD
 
-node_modules/.bin/babel-node version-check.js
-
 for patch in $(cd patch/; find . -name \*.patch); do
   echo == Applying $patch
   (

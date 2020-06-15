@@ -6,10 +6,6 @@
   "email": "mvines@gmail.com",
   "homepage": "https://github.com/mvines/ci-gate",
   "main": "index.js",
-  "engines": {
-    "node": "^9.0.0",
-    "npm": "^5.6.0"
-  },
   "scripts": {
     "postinstall": "scripts/postinstall.sh",
     "start": "babel-node index.js",
