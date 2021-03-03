@@ -81,6 +81,14 @@ const envconst = {
    */
   GITHUB_MERGE_METHOD: 'rebase',
 
+  /*
+    Enables automerge feature if true
+  */
+  AUTOMERGE: false,
+
+  /*
+    Specify the string label (eg, 'automerge')
+   */
   AUTOMERGE_LABEL: 'automerge',
 };
 
@@ -233,6 +241,9 @@ async function handleCommitsPushedToPullRequest(repoName, prNumber) {
 }
 
 async function autoMergePullRequest(repoName, prNumber) {
+  if (!envconst.AUTOMERGE) {
+    return;
+  }
   const repo = githubClient.repo(repoName);
   const pr = repo.pr(prNumber);
   const issue = repo.issue(prNumber);
@@ -429,6 +440,10 @@ async function onGithubStatusUpdate(payload) {
         target_url: new_target_url,
       });
     }
+  }
+
+  if (!envconst.AUTOMERGE) {
+    return;
   }
 
   autoMergePullRequestsPending = true;
