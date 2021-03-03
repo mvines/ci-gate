@@ -26,7 +26,7 @@
     "fs-extra": "^8.1.0",
     "moment": "^2.24.0",
     "octonode": "^0.9.5",
-    "request-promise": "^4.2.5",
+    "request-promise": "^4.2.6",
     "silk-log": "^1.14.5"
   },
   "devDependencies": {
