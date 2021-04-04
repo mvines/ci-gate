@@ -219,12 +219,23 @@ async function prHasLabel(repoName, prNumber, labelName) {
 }
 
 async function userInCiWhitelist(repoName, prNumber, user) {
+  if (envconst.CI_USER_WHITELIST.split(',').includes(user)) {
+    log.info(`${user} is in CI_USER_WHITELIST`);
+    return true;
+  }
+
   const repo = githubClient.repo(repoName);
+
   try {
     if (await repo.collaboratorsAsync(user)) {
+      log.info(`${user} is a collaborator`);
       return true;
     }
+  } catch (err) {
+    log.warn(`${user} is not a collaborator:`, err);
+  }
 
+  try {
     // If this PR has previously been accepted by somebody adding the CI_LABEL,
     // then accept future updates to the PR.  This avoids the need to
     // continually readd the `CI_LABEL` at the expense of trusting the PR author
@@ -232,19 +243,18 @@ async function userInCiWhitelist(repoName, prNumber, user) {
     const statusesResponse = await repo.statusesAsync(`pull/${prNumber}/head`);
     const statuses = statusesResponse[0];
 
-    const ciGateStatus = statuses.find(s => {
-      return s.context === STATUS_CONTEXT;
+    const ciGateSuccess = statuses.some(s => {
+      return (s.context === STATUS_CONTEXT) && (s.state === 'success');
     });
 
-    if (ciGateStatus && ciGateStatus === 'success') {
+    if (ciGateSuccess) {
+      log.info(`${STATUS_CONTEXT} already success for PR ${prNumber}`);
       return true;
     }
-
-    //statuses = await repo.statusesAsync(headSha
   } catch (err) {
-    log.warn(`Error: userInCiWhitelist(${user}):`, err.message);
+    log.warn(`${STATUS_CONTEXT} status check failed for PR ${prNumber}:`, err);
   }
-  return envconst.CI_USER_WHITELIST.split(',').includes(user);
+  return false;
 }
 
 async function handleCommitsPushedToPullRequest(repoName, prNumber) {
