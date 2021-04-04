@@ -100,11 +100,34 @@ for (const v in envconst) {
 }
 
 const githubClient = github.client(envconst.GITHUB_TOKEN);
-const buildkiteClient = createBuildKiteClient({
-  accessToken: envconst.BUILDKITE_TOKEN
-});
-buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization);
-let buildkiteOrg;
+
+
+let buildkiteClient = null;
+let buildkiteOrg = null;
+async function getBuildkitePipeline(pipeline) {
+  let nullBuildkiteOrg = buildkiteOrg === null;
+  console.log(`nullBuildkiteOrg: ${nullBuildkiteOrg}`);
+  if (nullBuildkiteOrg) {
+    console.log(`Connecting to ${envconst.BUILDKITE_ORG_SLUG} Buildkite organization`);
+    buildkiteClient = createBuildKiteClient({
+      accessToken: envconst.BUILDKITE_TOKEN
+    });
+    buildkiteClient.getOrganizationAsync = promisify(buildkiteClient.getOrganization);
+    buildkiteOrg = await buildkiteClient.getOrganizationAsync(envconst.BUILDKITE_ORG_SLUG);
+    buildkiteOrg.getPipelineAsync = promisify(buildkiteOrg.getPipeline);
+  }
+
+  try {
+    return buildkiteOrg.getPipelineAsync(pipeline);
+  } catch (err) {
+    console.log(`Failed to get buildkite pipeline: ${err}`);
+    if (!nullBuildkiteOrg) {
+      buildkiteClient = buildkiteOrg = null;
+      return getBuildkitePipeline(pipeline);
+    }
+  }
+  return pipeline;
+}
 
 async function triggerPipeline(pipelineName, repoName, baseBranch, prNumber, commit, label, title, user) {
   const repo = githubClient.repo(repoName);
@@ -120,7 +143,7 @@ async function triggerPipeline(pipelineName, repoName, baseBranch, prNumber, com
   const affected_files = prFilenames.join(':');
   log.info(`files affected by this PR: ${affected_files}`);
 
-  const pipeline = await buildkiteOrg.getPipelineAsync(pipelineName);
+  const pipeline = await getBuildkitePipeline(pipelineName);
 
   let description = `${pipelineName} pipeline not present`;
   if (pipeline) {
@@ -680,7 +703,7 @@ async function onBuildKitePublicLogRequest(req, res) {
     return;
   }
 
-  const pipeline = await buildkiteOrg.getPipelineAsync(buildInfo.pipeline);
+  const pipeline = await getBuildkitePipeline(buildInfo.pipeline);
   pipeline.listBuildsAsync = promisify(pipeline.listBuilds);
 
   // TODO: Add pagination support for older builds
@@ -865,7 +888,7 @@ async function onBuildKitePublicArtifactRequest(req, res) {
     return;
   }
 
-  const pipeline = await buildkiteOrg.getPipelineAsync(buildInfo.pipeline);
+  const pipeline = await getBuildkitePipeline(buildInfo.pipeline);
   pipeline.getBuildAsync = promisify(pipeline.getBuild);
 
   const build = await pipeline.getBuildAsync(buildInfo.buildNumber);
@@ -888,11 +911,8 @@ async function onBuildKitePublicArtifactRequest(req, res) {
   res.end();
 }
 
-async function main() {
+function main() {
   try {
-    buildkiteOrg = await buildkiteClient.getOrganizationAsync(envconst.BUILDKITE_ORG_SLUG);
-    buildkiteOrg.getPipelineAsync = promisify(buildkiteOrg.getPipeline);
-
     const webhooks = new WebhooksApi({
       secret: envconst.GITHUB_WEBHOOK_SECRET,
       path: '/github',
