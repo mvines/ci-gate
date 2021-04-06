@@ -101,6 +101,8 @@ for (const v in envconst) {
 
 const githubClient = github.client(envconst.GITHUB_TOKEN);
 
+const needsCiLabelDescription = `A project member must add the '${CI_LABEL}' label for tests to start`;
+
 
 let buildkiteClient = null;
 let buildkiteOrg = null;
@@ -232,23 +234,23 @@ async function userInCiWhitelist(repoName, prNumber, user) {
       return true;
     }
   } catch (err) {
-    log.warn(`${user} is not a collaborator:`, err);
+    log.debug(`${user} is not a collaborator:`, err);
   }
 
   try {
     // If this PR has previously been accepted by somebody adding the CI_LABEL,
     // then accept future updates to the PR.  This avoids the need to
-    // continually readd the `CI_LABEL` at the expense of trusting the PR author
+    // continually re-add the `CI_LABEL` at the expense of trusting the PR author
     // more.
     const statusesResponse = await repo.statusesAsync(`pull/${prNumber}/head`);
     const statuses = statusesResponse[0];
 
     const ciGateSuccess = statuses.some(s => {
-      return (s.context === STATUS_CONTEXT) && (s.state === 'success');
+      return (s.context === STATUS_CONTEXT) && (s.description !== needsCiLabelDescription);
     });
 
     if (ciGateSuccess) {
-      log.info(`${STATUS_CONTEXT} already success for PR ${prNumber}`);
+      log.info(`${STATUS_CONTEXT} passed for PR ${prNumber}`);
       return true;
     }
   } catch (err) {
@@ -537,7 +539,7 @@ async function onGithubPullRequest(payload) {
       await repo.statusAsync(headSha, {
         'state': 'pending',
         'context': STATUS_CONTEXT,
-        'description': `A project member must add the '${CI_LABEL}' label for tests to start`,
+        'description': needsCiLabelDescription,
       });
     }
     break;
