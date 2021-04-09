@@ -71,6 +71,11 @@ const envconst = {
   CI_USER_WHITELIST: '', // comma separated, no spaces
 
   /*
+    If true, allow all CI from all users
+   */
+  CI_FOR_EVERYBODY: false,
+
+  /*
      Labels that are specific to instance of CI gate.
      These labels are passed on to buildkite.
    */
@@ -102,7 +107,6 @@ for (const v in envconst) {
 const githubClient = github.client(envconst.GITHUB_TOKEN);
 
 const needsCiLabelDescription = `A project member must add the '${CI_LABEL}' label for tests to start`;
-
 
 let buildkiteClient = null;
 let buildkiteOrg = null;
@@ -221,6 +225,11 @@ async function prHasLabel(repoName, prNumber, labelName) {
 }
 
 async function userInCiWhitelist(repoName, prNumber, user) {
+  if (envconst.CI_FOR_EVERYBODY) {
+    log.info(`CI_FOR_EVERYBODY is enabled`);
+    return true;
+  }
+
   if (envconst.CI_USER_WHITELIST.split(',').includes(user)) {
     log.info(`${user} is in CI_USER_WHITELIST`);
     return true;
@@ -246,7 +255,7 @@ async function userInCiWhitelist(repoName, prNumber, user) {
     const statuses = statusesResponse[0];
 
     const ciGateSuccess = statuses.some(s => {
-      return (s.context === STATUS_CONTEXT) && (s.description !== needsCiLabelDescription);
+      return (s.context === STATUS_CONTEXT) && (s.state === 'success');
     });
 
     if (ciGateSuccess) {
