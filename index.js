@@ -243,7 +243,7 @@ async function userInCiWhitelist(repoName, prNumber, user) {
       return true;
     }
   } catch (err) {
-    log.debug(`${user} is not a collaborator:`, err);
+    log.info(`${user} is not a collaborator:`, err);
   }
 
   try {
