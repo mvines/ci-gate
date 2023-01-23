@@ -161,6 +161,7 @@ async function triggerPipeline(pipelineName, repoName, baseBranch, prNumber, com
       message,
       meta_data: {
         affected_files,
+        "pr_number": prNumber,
       },
       env: {
         'GITHUB_USER': user,
