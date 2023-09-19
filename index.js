@@ -7,6 +7,7 @@ import github from 'octonode';
 import {promisify} from 'es6-promisify';
 import createBuildKiteClient from 'buildnode';
 import moment from 'moment';
+import axios from 'axios';
 
 const log = createLogger('index');
 
@@ -136,6 +137,11 @@ async function getBuildkitePipeline(pipeline) {
 }
 
 async function triggerPipeline(pipelineName, repoName, baseBranch, prNumber, commit, label, title, user) {
+  if (pipelineName != 'solana') {
+    log.info('only support solana pipeline');
+    return;
+  }
+
   const repo = githubClient.repo(repoName);
   const branch = `pull/${prNumber}/head`;
 
@@ -149,31 +155,37 @@ async function triggerPipeline(pipelineName, repoName, baseBranch, prNumber, com
   const affected_files = prFilenames.join(':');
   log.info(`files affected by this PR: ${affected_files}`);
 
-  const pipeline = await getBuildkitePipeline(pipelineName);
+  let data = {
+    'branch': branch,
+    'commit': commit,
+    'message': message,
+    meta_data: {
+      'affected_files': affected_files,
+      'pr_number': prNumber,
+    },
+    env: {
+      'GITHUB_USER': user,
+    },
+    pull_request_base_branch: baseBranch
+  };
+
+  axios.post(
+    `https://api.buildkite.com/v2/organizations/${envconst.BUILDKITE_ORG_SLUG}/pipelines/solana/builds`,
+    data,
+    {
+      headers: {
+        'Authorization': `Bearer ${envconst.BUILDKITE_TOKEN}`,
+      },
+    },
+  )
+    .then(function (response) {
+      log.info(response);
+    })
+    .catch(function (error) {
+      log.info(error);
+    });
 
   let description = `${pipelineName} pipeline not present`;
-  if (pipeline) {
-    pipeline.createBuildAsync = promisify(pipeline.createBuild);
-
-    const newBuild = await pipeline.createBuildAsync({
-      branch,
-      commit,
-      message,
-      meta_data: {
-        affected_files,
-        "pr_number": prNumber,
-      },
-      env: {
-        'GITHUB_USER': user,
-      },
-      pull_request_base_branch: baseBranch,
-    });
-    description = `Pull Request accepted for ${label} pipeline`;
-    log.info('createBuild result:', newBuild);
-  } else {
-    log.info(description);
-  }
-
   await repo.statusAsync(
     commit,
     {
